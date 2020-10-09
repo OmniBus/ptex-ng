@@ -50,6 +50,10 @@ static char textEncName[128] = "";
 static char textEOL[16] = "";
 static GBool noPageBreaks = gFalse;
 static GBool insertBOM = gFalse;
+static double marginLeft = 0;
+static double marginRight = 0;
+static double marginTop = 0;
+static double marginBottom = 0;
 static char ownerPassword[33] = "\001";
 static char userPassword[33] = "\001";
 static GBool quiet = gFalse;
@@ -88,6 +92,14 @@ static ArgDesc argDesc[] = {
    "don't insert page breaks between pages"},
   {"-bom",     argFlag,     &insertBOM,     0,
    "insert a Unicode BOM at the start of the text file"},
+  {"-marginl", argFP,       &marginLeft,    0,
+   "left page margin"},
+  {"-marginr", argFP,       &marginRight,   0,
+   "right page margin"},
+  {"-margint", argFP,       &marginTop,     0,
+   "top page margin"},
+  {"-marginb", argFP,       &marginBottom,  0,
+   "bottom page margin"},
   {"-opw",     argString,   ownerPassword,  sizeof(ownerPassword),
    "owner password (for encrypted files)"},
   {"-upw",     argString,   userPassword,   sizeof(userPassword),
@@ -111,13 +123,12 @@ static ArgDesc argDesc[] = {
 
 int main(int argc, char *argv[]) {
   PDFDoc *doc;
-  GString *fileName;
+  char *fileName;
   GString *textFileName;
   GString *ownerPW, *userPW;
   TextOutputControl textOutControl;
   TextOutputDev *textOut;
   UnicodeMap *uMap;
-  Object info;
   GBool ok;
   char *p;
   int exitCode;
@@ -133,13 +144,14 @@ int main(int argc, char *argv[]) {
   // more info)
   fpu_control_t cw;
   _FPU_GETCW(cw);
-  cw = (cw & ~_FPU_EXTENDED) | _FPU_DOUBLE;
+  cw = (fpu_control_t)((cw & ~_FPU_EXTENDED) | _FPU_DOUBLE);
   _FPU_SETCW(cw);
 #endif
 
   exitCode = 99;
 
   // parse args
+  fixCommandLine(&argc, &argv);
   ok = parseArgs(argDesc, &argc, argv);
   if (!ok || argc < 2 || argc > 3 || printVersion || printHelp) {
     fprintf(stderr, "pdftotext version %s\n", xpdfVersion);
@@ -149,7 +161,7 @@ int main(int argc, char *argv[]) {
     }
     goto err0;
   }
-  fileName = new GString(argv[1]);
+  fileName = argv[1];
 
   // read config file
   globalParams = new GlobalParams(cfgFileName);
@@ -171,7 +183,6 @@ int main(int argc, char *argv[]) {
   // get mapping to output encoding
   if (!(uMap = globalParams->getTextEncoding())) {
     error(errConfig, -1, "Couldn't get text encoding");
-    delete fileName;
     goto err1;
   }
 
@@ -210,12 +221,11 @@ int main(int argc, char *argv[]) {
   if (argc == 3) {
     textFileName = new GString(argv[2]);
   } else {
-    p = fileName->getCString() + fileName->getLength() - 4;
-    if (!strcmp(p, ".pdf") || !strcmp(p, ".PDF")) {
-      textFileName = new GString(fileName->getCString(),
-				 fileName->getLength() - 4);
+    p = fileName + strlen(fileName) - 4;
+    if (strlen(fileName) > 4 && (!strcmp(p, ".pdf") || !strcmp(p, ".PDF"))) {
+      textFileName = new GString(fileName, (int)strlen(fileName) - 4);
     } else {
-      textFileName = fileName->copy();
+      textFileName = new GString(fileName);
     }
     textFileName->append(".txt");
   }
@@ -249,6 +259,10 @@ int main(int argc, char *argv[]) {
   textOutControl.clipText = clipText;
   textOutControl.discardDiagonalText = discardDiag;
   textOutControl.insertBOM = insertBOM;
+  textOutControl.marginLeft = marginLeft;
+  textOutControl.marginRight = marginRight;
+  textOutControl.marginTop = marginTop;
+  textOutControl.marginBottom = marginBottom;
   textOut = new TextOutputDev(textFileName->getCString(), &textOutControl,
 			      gFalse);
   if (textOut->isOk()) {

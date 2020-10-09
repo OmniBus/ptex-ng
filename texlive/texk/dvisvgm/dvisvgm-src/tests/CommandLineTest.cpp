@@ -2,7 +2,7 @@
 ** CommandLineTest.cpp                                                  **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -95,7 +95,7 @@ TEST(CommandLineTest, arg_combined) {
 	EXPECT_EQ(cmd.pageOpt.value(), "5");
 	EXPECT_TRUE(cmd.listSpecialsOpt.given());
 	EXPECT_TRUE(cmd.stdoutOpt.given());
-	EXPECT_TRUE(cmd.exactOpt.given());
+	EXPECT_TRUE(cmd.exactBboxOpt.given());
 
 	// can't combine short options that accept optional parameters
 	const char *args2[] = {"progname", "-nls", "-p5", "-omyfile.xyz"};

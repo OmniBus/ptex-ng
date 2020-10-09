@@ -1,7 +1,6 @@
-require 'pathname'
 require 'forwardable'
-require 'tsort'
-require 'shellwords'
+autoload :TSort, 'tsort'
+autoload :Shellwords, 'shellwords'
 
 module MRuby
   module Gem
@@ -52,6 +51,8 @@ module MRuby
       end
 
       def setup
+        return if defined?(@linker)  # return if already set up
+
         MRuby::Gem.current = self
         MRuby::Build::COMMANDS.each do |command|
           instance_variable_set("@#{command}", @build.send(command).clone)
@@ -63,7 +64,7 @@ module MRuby
           objfile(f.relative_path_from(@dir).to_s.pathmap("#{build_dir}/%X"))
         end
 
-        @test_rbfiles = Dir.glob("#{dir}/test/**/*.rb")
+        @test_rbfiles = Dir.glob("#{dir}/test/**/*.rb").sort
         @test_objs = Dir.glob("#{dir}/test/*.{c,cpp,cxx,cc,m,asm,s,S}").map do |f|
           objfile(f.relative_path_from(dir).to_s.pathmap("#{build_dir}/%X"))
         end
@@ -87,9 +88,12 @@ module MRuby
           fail "#{name || dir} required to set name, license(s) and author(s)"
         end
 
-        build.libmruby << @objs
+        build.libmruby_objs << @objs
 
         instance_eval(&@build_config_initializer) if @build_config_initializer
+
+        repo_url = build.gem_dir_to_repo_url[dir]
+        build.locks[repo_url]['version'] = version if repo_url
       end
 
       def setup_compilers
@@ -102,6 +106,15 @@ module MRuby
         define_gem_init_builder if @generate_functions
       end
 
+      def for_windows?
+        if build.kind_of?(MRuby::CrossBuild)
+          return %w(x86_64-w64-mingw32 i686-w64-mingw32).include?(build.host_target)
+        elsif build.kind_of?(MRuby::Build)
+          return ('A'..'Z').to_a.any? { |vol| Dir.exist?("#{vol}:") }
+        end
+        return false
+      end
+
       def add_dependency(name, *requirements)
         default_gem = requirements.last.kind_of?(Hash) ? requirements.pop : nil
         requirements = ['>= 0.0.0'] if requirements.empty?
@@ -110,15 +123,11 @@ module MRuby
       end
 
       def add_test_dependency(*args)
-        add_dependency(*args) if build.test_enabled?
+        add_dependency(*args) if build.test_enabled? || build.bintest_enabled?
       end
 
       def add_conflict(name, *req)
         @conflicts << {:gem => name, :requirements => req.empty? ? nil : req}
-      end
-
-      def self.bin=(bin)
-        @bins = [bin].flatten
       end
 
       def build_dir
@@ -157,7 +166,7 @@ module MRuby
       def define_gem_init_builder
         file objfile("#{build_dir}/gem_init") => [ "#{build_dir}/gem_init.c", File.join(dir, "mrbgem.rake") ]
         file "#{build_dir}/gem_init.c" => [build.mrbcfile, __FILE__] + [rbfiles].flatten do |t|
-          FileUtils.mkdir_p build_dir
+          mkdir_p build_dir
           generate_gem_init("#{build_dir}/gem_init.c")
         end
       end
@@ -269,16 +278,18 @@ module MRuby
       # ~> compare algorithm
       #
       # Example:
+      #    ~> 2     means >= 2.0.0 and < 3.0.0
       #    ~> 2.2   means >= 2.2.0 and < 3.0.0
-      #    ~> 2.2.0 means >= 2.2.0 and < 2.3.0
+      #    ~> 2.2.2 means >= 2.2.2 and < 2.3.0
       def twiddle_wakka_ok?(other)
         gr_or_eql = (self <=> other) >= 0
-        still_minor = (self <=> other.skip_minor) < 0
-        gr_or_eql and still_minor
+        still_major_or_minor = (self <=> other.skip_major_or_minor) < 0
+        gr_or_eql and still_major_or_minor
       end
 
-      def skip_minor
+      def skip_major_or_minor
         a = @ary.dup
+        a << 0 if a.size == 1 # ~> 2 can also be represented as ~> 2.0
         a.slice!(-1)
         a[-1] = a[-1].succ
         a
@@ -334,26 +345,26 @@ module MRuby
       end
 
       def generate_gem_table build
-        gem_table = @ary.reduce({}) { |res,v| res[v.name] = v; res }
+        gem_table = each_with_object({}) { |spec, h| h[spec.name] = spec }
 
-        default_gems = []
+        default_gems = {}
         each do |g|
           g.dependencies.each do |dep|
-            default_gems << default_gem_params(dep) unless gem_table.key? dep[:gem]
+            default_gems[dep[:gem]] ||= default_gem_params(dep)
           end
         end
 
         until default_gems.empty?
-          def_gem = default_gems.pop
+          def_name, def_gem = default_gems.shift
+          next if gem_table[def_name]
 
-          spec = build.gem def_gem[:default]
-          fail "Invalid gem name: #{spec.name} (Expected: #{def_gem[:gem]})" if spec.name != def_gem[:gem]
+          spec = gem_table[def_name] = build.gem(def_gem[:default])
+          fail "Invalid gem name: #{spec.name} (Expected: #{def_name})" if spec.name != def_name
           spec.setup
 
           spec.dependencies.each do |dep|
-            default_gems << default_gem_params(dep) unless gem_table.key? dep[:gem]
+            default_gems[dep[:gem]] ||= default_gem_params(dep)
           end
-          gem_table[spec.name] = spec
         end
 
         each do |g|
@@ -428,7 +439,8 @@ module MRuby
       end
 
       def import_include_paths(g)
-        gem_table = @ary.reduce({}) { |res,v| res[v.name] = v; res }
+        gem_table = each_with_object({}) { |spec, h| h[spec.name] = spec }
+
         g.dependencies.each do |dep|
           dep_g = gem_table[dep[:gem]]
           # We can do recursive call safely
@@ -454,5 +466,6 @@ module MRuby
     def new(&block); block.call(self); end
     def config=(obj); @config = obj; end
     def gem(gemdir, &block); @config.gem(gemdir, &block); end
+    def gembox(gemfile); @config.gembox(gemfile); end
   end # GemBox
 end # MRuby

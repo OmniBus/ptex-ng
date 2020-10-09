@@ -112,7 +112,7 @@ int Lexer::lookChar() {
 Object *Lexer::getObj(Object *obj) {
   char *p;
   int c, c2;
-  GBool comment, neg, doubleMinus, done;
+  GBool comment, neg, doubleMinus, done, invalid;
   int numParen;
   int xi;
   double xf, scale;
@@ -141,7 +141,7 @@ Object *Lexer::getObj(Object *obj) {
   // number
   case '0': case '1': case '2': case '3': case '4':
   case '5': case '6': case '7': case '8': case '9':
-  case '-': case '.':
+  case '+': case '-': case '.':
     // Adobe's number lexer has some "interesting" behavior:
     // "--123" is interpreted as 0
     // "--123.4" is interpreted as -123.4 [I've seen this in the wild]
@@ -159,7 +159,9 @@ Object *Lexer::getObj(Object *obj) {
     neg = gFalse;
     doubleMinus = gFalse;
     xf = xi = 0;
-    if (c == '-') {
+    if (c == '+') {
+      // just ignore it
+    } else if (c == '-') {
       neg = gTrue;
       if (lookChar() == '-') {
 	doubleMinus = gTrue;
@@ -177,7 +179,9 @@ Object *Lexer::getObj(Object *obj) {
       if (isdigit(c)) {
 	getChar();
 	xi = xi * 10 + (c - '0');
-	xf = xf * 10 + (c - '0');
+	if (xf < 1e20) {
+	  xf = xf * 10 + (c - '0');
+	}
       } else if (c == '.') {
 	getChar();
 	goto doReal;
@@ -339,6 +343,7 @@ Object *Lexer::getObj(Object *obj) {
     p = tokBuf;
     n = 0;
     s = NULL;
+    invalid = gFalse;
     while ((c = lookChar()) != EOF && !specialChars[c]) {
       getChar();
       if (c == '#') {
@@ -366,6 +371,9 @@ Object *Lexer::getObj(Object *obj) {
 	  goto notEscChar;
 	}
 	getChar();
+	if (c == 0) {
+	  invalid = gTrue;
+	}
       }
      notEscChar:
       // the PDF spec claims that names are limited to 127 chars, but
@@ -373,15 +381,21 @@ Object *Lexer::getObj(Object *obj) {
       // accept longer names
       ++n;
       if (n < tokBufSize) {
-	*p++ = c;
+	*p++ = (char)c;
       } else if (n == tokBufSize) {
-	*p = c;
+	*p = (char)c;
 	s = new GString(tokBuf, n);
       } else {
 	s->append((char)c);
       }
     }
-    if (n < tokBufSize) {
+    if (invalid) {
+      error(errSyntaxError, getPos(), "Null character in name");
+      obj->initError();
+      if (s) {
+	delete s;
+      }
+    } else if (n < tokBufSize) {
       *p = '\0';
       obj->initName(tokBuf);
     } else {
@@ -393,7 +407,7 @@ Object *Lexer::getObj(Object *obj) {
   // array punctuation
   case '[':
   case ']':
-    tokBuf[0] = c;
+    tokBuf[0] = (char)c;
     tokBuf[1] = '\0';
     obj->initCmd(tokBuf);
     break;
@@ -484,7 +498,7 @@ Object *Lexer::getObj(Object *obj) {
   // command
   default:
     p = tokBuf;
-    *p++ = c;
+    *p++ = (char)c;
     n = 1;
     while ((c = lookChar()) != EOF && !specialChars[c]) {
       getChar();
@@ -492,7 +506,7 @@ Object *Lexer::getObj(Object *obj) {
 	error(errSyntaxError, getPos(), "Command token too long");
 	break;
       }
-      *p++ = c;
+      *p++ = (char)c;
     }
     *p = '\0';
     if (tokBuf[0] == 't' && !strcmp(tokBuf, "true")) {

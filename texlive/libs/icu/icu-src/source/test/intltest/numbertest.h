@@ -3,15 +3,23 @@
 
 #include "unicode/utypes.h"
 
-#if !UCONFIG_NO_FORMATTING && !UPRV_INCOMPLETE_CPP11_SUPPORT
+#if !UCONFIG_NO_FORMATTING
 #pragma once
 
-#include "number_stringbuilder.h"
+#include "formatted_string_builder.h"
 #include "intltest.h"
+#include "itformat.h"
 #include "number_affixutils.h"
+#include "string_segment.h"
+#include "numrange_impl.h"
+#include "unicode/locid.h"
+#include "unicode/numberformatter.h"
+#include "unicode/numberrangeformatter.h"
 
 using namespace icu::number;
 using namespace icu::number::impl;
+using namespace icu::numparse;
+using namespace icu::numparse::impl;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // INSTRUCTIONS:                                                                      //
@@ -36,7 +44,7 @@ class AffixUtilsTest : public IntlTest {
                                        UErrorCode &status);
 };
 
-class NumberFormatterApiTest : public IntlTest {
+class NumberFormatterApiTest : public IntlTestWithFieldPosition {
   public:
     NumberFormatterApiTest();
     NumberFormatterApiTest(UErrorCode &status);
@@ -48,6 +56,7 @@ class NumberFormatterApiTest : public IntlTest {
     void unitCompoundMeasure();
     void unitCurrency();
     void unitPercent();
+    void percentParity();
     void roundingFraction();
     void roundingFigures();
     void roundingFractionFigures();
@@ -59,11 +68,21 @@ class NumberFormatterApiTest : public IntlTest {
     // TODO: Add this method if currency symbols override support is added.
     //void symbolsOverride();
     void sign();
+    void signCoverage();
     void decimal();
+    void scale();
     void locale();
+    void skeletonUserGuideExamples();
     void formatTypes();
+    void fieldPositionLogic();
+    void fieldPositionCoverage();
+    void toFormat();
     void errors();
     void validRanges();
+    void copyMove();
+    void localPointerCAPI();
+    void toObject();
+    void toDecimalNumber();
 
     void runIndexedTest(int32_t index, UBool exec, const char *&name, char *par = 0);
 
@@ -74,6 +93,7 @@ class NumberFormatterApiTest : public IntlTest {
     CurrencyUnit CAD;
     CurrencyUnit ESP;
     CurrencyUnit PTE;
+    CurrencyUnit RON;
 
     MeasureUnit METER;
     MeasureUnit DAY;
@@ -93,24 +113,38 @@ class NumberFormatterApiTest : public IntlTest {
     DecimalFormatSymbols SWISS_SYMBOLS;
     DecimalFormatSymbols MYANMAR_SYMBOLS;
 
-    void assertFormatDescending(const UnicodeString &message, const UnlocalizedNumberFormatter &f,
-                                Locale locale, ...);
+    void assertFormatDescending(const char16_t* message, const char16_t* skeleton,
+                                const UnlocalizedNumberFormatter& f, Locale locale, ...);
 
-    void assertFormatDescendingBig(const UnicodeString &message, const UnlocalizedNumberFormatter &f,
-                                   Locale locale, ...);
+    void assertFormatDescendingBig(const char16_t* message, const char16_t* skeleton,
+                                   const UnlocalizedNumberFormatter& f, Locale locale, ...);
 
-    void assertFormatSingle(const UnicodeString &message, const UnlocalizedNumberFormatter &f,
-                            Locale locale, double input, const UnicodeString &expected);
+    FormattedNumber
+    assertFormatSingle(const char16_t* message, const char16_t* skeleton,
+                       const UnlocalizedNumberFormatter& f, Locale locale, double input,
+                       const UnicodeString& expected);
+
+    void assertUndefinedSkeleton(const UnlocalizedNumberFormatter& f);
+
+    void assertNumberFieldPositions(
+      const char16_t* message,
+      const FormattedNumber& formattedNumber,
+      const UFieldPosition* expectedFieldPositions,
+      int32_t length);
 };
 
 class DecimalQuantityTest : public IntlTest {
   public:
     void testDecimalQuantityBehaviorStandalone();
     void testSwitchStorage();
+    void testCopyMove();
     void testAppend();
     void testConvertToAccurateDouble();
     void testUseApproximateDoubleWhenAble();
     void testHardDoubleConversion();
+    void testToDouble();
+    void testMaxDigits();
+    void testNickelRounding();
 
     void runIndexedTest(int32_t index, UBool exec, const char *&name, char *par = 0);
 
@@ -142,7 +176,7 @@ class ModifiersTest : public IntlTest {
                               UnicodeString expectedChars, UnicodeString expectedFields,
                               UErrorCode &status);
 
-    void assertModifierEquals(const Modifier &mod, NumberStringBuilder &sb, int32_t expectedPrefixLength,
+    void assertModifierEquals(const Modifier &mod, FormattedStringBuilder &sb, int32_t expectedPrefixLength,
                               bool expectedStrong, UnicodeString expectedChars,
                               UnicodeString expectedFields, UErrorCode &status);
 };
@@ -162,6 +196,7 @@ class PatternModifierTest : public IntlTest {
 
 class PatternStringTest : public IntlTest {
   public:
+    void testLocalized();
     void testToPatternSimple();
     void testExceptionOnInvalid();
     void testBug13117();
@@ -171,20 +206,93 @@ class PatternStringTest : public IntlTest {
   private:
 };
 
-class NumberStringBuilderTest : public IntlTest {
+class NumberParserTest : public IntlTest {
   public:
-    void testInsertAppendUnicodeString();
-    void testSplice();
-    void testInsertAppendCodePoint();
-    void testCopy();
-    void testFields();
-    void testUnlimitedCapacity();
-    void testCodePoints();
+    void testBasic();
+    void testLocaleFi();
+    void testSeriesMatcher();
+    void testCombinedCurrencyMatcher();
+    void testAffixPatternMatcher();
+    void testGroupingDisabled();
+    void testCaseFolding();
+    void test20360_BidiOverflow();
+    void testInfiniteRecursion();
+
+    void runIndexedTest(int32_t index, UBool exec, const char *&name, char *par = 0);
+};
+
+class NumberSkeletonTest : public IntlTest {
+  public:
+    void validTokens();
+    void invalidTokens();
+    void unknownTokens();
+    void unexpectedTokens();
+    void duplicateValues();
+    void stemsRequiringOption();
+    void defaultTokens();
+    void flexibleSeparators();
 
     void runIndexedTest(int32_t index, UBool exec, const char *&name, char *par = 0);
 
   private:
-    void assertEqualsImpl(const UnicodeString &a, const NumberStringBuilder &b);
+    void expectedErrorSkeleton(const char16_t** cases, int32_t casesLen);
+};
+
+class NumberRangeFormatterTest : public IntlTestWithFieldPosition {
+  public:
+    NumberRangeFormatterTest();
+    NumberRangeFormatterTest(UErrorCode &status);
+
+    void testSanity();
+    void testBasic();
+    void testCollapse();
+    void testIdentity();
+    void testDifferentFormatters();
+    void testPlurals();
+    void testFieldPositions();
+    void testCopyMove();
+    void toObject();
+
+    void runIndexedTest(int32_t index, UBool exec, const char *&name, char *par = 0);
+
+  private:
+    CurrencyUnit USD;
+    CurrencyUnit GBP;
+    CurrencyUnit PTE;
+
+    MeasureUnit METER;
+    MeasureUnit KILOMETER;
+    MeasureUnit FAHRENHEIT;
+    MeasureUnit KELVIN;
+
+    void assertFormatRange(
+      const char16_t* message,
+      const UnlocalizedNumberRangeFormatter& f,
+      Locale locale,
+      const char16_t* expected_10_50,
+      const char16_t* expected_49_51,
+      const char16_t* expected_50_50,
+      const char16_t* expected_00_30,
+      const char16_t* expected_00_00,
+      const char16_t* expected_30_3K,
+      const char16_t* expected_30K_50K,
+      const char16_t* expected_49K_51K,
+      const char16_t* expected_50K_50K,
+      const char16_t* expected_50K_50M);
+    
+    FormattedNumberRange assertFormattedRangeEquals(
+      const char16_t* message,
+      const LocalizedNumberRangeFormatter& l,
+      double first,
+      double second,
+      const char16_t* expected);
+};
+
+class NumberPermutationTest : public IntlTest {
+  public:
+    void testPermutations();
+
+    void runIndexedTest(int32_t index, UBool exec, const char *&name, char *par = 0);
 };
 
 
@@ -214,8 +322,11 @@ class NumberTest : public IntlTest {
         TESTCLASS(3, ModifiersTest);
         TESTCLASS(4, PatternModifierTest);
         TESTCLASS(5, PatternStringTest);
-        TESTCLASS(6, NumberStringBuilderTest);
-        TESTCLASS(7, DoubleConversionTest);
+        TESTCLASS(6, DoubleConversionTest);
+        TESTCLASS(7, NumberParserTest);
+        TESTCLASS(8, NumberSkeletonTest);
+        TESTCLASS(9, NumberRangeFormatterTest);
+        TESTCLASS(10, NumberPermutationTest);
         default: name = ""; break; // needed to end loop
         }
     }

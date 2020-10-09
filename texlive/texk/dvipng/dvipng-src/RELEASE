@@ -1,14 +1,10 @@
-Release notes for version 1.15 of the dvipng package:
+Release notes for version 1.17 of the dvipng package:
 
 This program makes PNG graphics from DVI files as obtained from TeX
 and its relatives.
 
 
-This is a bugfix release that removes the unnecessarily long delay in --follow
-mode and a few segfaults on out-of-memory or missing standard-latex files, and
-adds some documentation improvements. It also removes support for libt1, which
-is reportedly not developed anymore, and not needed since Freetype does a much
-better job.
+This is a bugfix release that re-enables PK font rendering and enables gamma printout and interactive mode startup without DVI.
 
 
 Report any bugs you find, see README for instructions.

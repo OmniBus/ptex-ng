@@ -2,7 +2,7 @@
 ** TriangularPatchTest.cpp                                              **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -123,8 +123,7 @@ TEST(TriangularPatchTest, bbox) {
 	points[2] = DPair(0, 10);
 	vector<Color> colors(3);
 	TriangularPatch tp(points, colors, Color::ColorSpace::RGB, 0, 0);
-	BoundingBox bbox;
-	tp.getBBox(bbox);
+	BoundingBox bbox = tp.getBBox();
 	EXPECT_EQ(bbox, BoundingBox(0, 0, 10, 10));
 }
 
@@ -136,8 +135,7 @@ TEST(TriangularPatchTest, boundaryPath) {
 	points[2] = DPair(0, 10);
 	vector<Color> colors(3);
 	TriangularPatch tp(points, colors, Color::ColorSpace::RGB, 0, 0);
-	GraphicsPath<double> path;
-	tp.getBoundaryPath(path);
+	GraphicsPath<double> path = tp.getBoundaryPath();
 	ostringstream oss;
 	path.writeSVG(oss, false);
 	EXPECT_EQ(oss.str(), "M0 0H10L0 10Z");
@@ -172,13 +170,13 @@ TEST(TriangularPatchTest, approximate) {
 	Callback callback;
 	tp.approximate(2, false, 0.1, callback);
 	EXPECT_EQ(callback.pathstr(), "M0 0H10L0 10Z");
-	EXPECT_EQ(callback.colorstr(), "#000000");
+	EXPECT_EQ(callback.colorstr(), "#000");
 
 	callback.reset();
 	tp.setColors(Color(1.0, 0.0, 0.0), Color(0.0, 1.0, 0.0), Color(0.0, 0.0, 1.0));
 	tp.approximate(2, false, 0.1, callback);
 	EXPECT_EQ(callback.pathstr(), "M0 0H5L0 5ZM0 5L5 0V5ZM0 5H5L0 10ZM5 0H10L5 5Z");
-	EXPECT_EQ(callback.colorstr(), "#aa2b2b#555555#2b2baa#2baa2b");
+	EXPECT_EQ(callback.colorstr(), "#aa2b2b#555#2b2baa#2baa2b");
 }
 
 

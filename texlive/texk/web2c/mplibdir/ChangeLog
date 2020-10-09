@@ -1,3 +1,40 @@
+2020-08-21  Luigi Scarso  <luigi.scarso@gmail.com>
+	* Changed epsilon in binary and decimal mode from 1E-52 to
+          2^-173 =~0.835E-52, so that mp_solve_rising_cubic now works as
+          expected.
+	* Fix @<Set the height and depth to zero if the bounding box is empty@>
+          in mp_set_text_box when height and depth are both -inf.
+
+2020-02-18  Luigi Scarso  <luigi.scarso@gmail.com>
+	* better mp_snprintf macro
+
+
+2019-03-06  Luigi Scarso  <luigi.scarso@gmail.com>
+	* Code clean-up.
+
+2019-02-06: Taco Hoekwater <taco@elvenkind.com>
+	* New primitive void: convert a suffix to a boolean. Work in progress.
+
+
+2019-01-28  Andreas Scherer  <https://ascherer.github.io>
+	* mpost.w: TeXnical nitpicking.
+
+2019-01-26  Luigi Scarso  <luigi.scarso@gmail.com>
+	* Fixed bisection algorithm (overflow of number of bisections in decimal mode with  low precision)
+	* Added 2 levels to the bisection algorithm for cubic intersection. Need testing.
+	* Fixed a buffer overflow on command line; for consistency with mp_reallocate_buffer, 
+	  now accepting input from command line  of at most  0xFFFFFFF bytes.
+
+
+2019-01-06  Luigi Scarso  <luigi.scarso@gmail.com>
+	* Added r-mpost as an alias for mpost --restricted 
+
+
+2018-10-22  Luigi Scarso  <luigi.scarso@gmail.com>
+	* Fixed a bug in cubic intersection in arbitrary precision math with low precision. 
+	* Raised minimal precision to 2 for decimal and binary mode.
+	* Added 3 levels to the bisection algorithm for for cubic intersection.
+
 2018-08-27  Luigi Scarso  <luigi.scarso@gmail.com>
 	* separation of mpmathbinary from the the core
 

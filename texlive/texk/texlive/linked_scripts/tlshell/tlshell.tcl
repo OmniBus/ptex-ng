@@ -1,6 +1,6 @@
 #!/usr/bin/env wish
 
-# Copyright 2017, 2018 Siep Kroonenberg
+# Copyright 2017-2020 Siep Kroonenberg
 
 # This file is licensed under the GNU General Public License version 2
 # or any later version.
@@ -10,20 +10,107 @@ package require Tk
 # security: disable send
 catch {rename send {}}
 
-# declarations and utilities shared with install-tl-gui.tcl
+# unix: make sure TL comes first on process searchpath
+# on windows, a wrapper takes care of this.
+if {$::tcl_platform(platform) ne "windows"} {
+  set texbin [file dirname [file normalize [info script]]]
+  # prepend texbin to PATH, unless it is already the _first_
+  # path component
+  set dirs [split $::env(PATH) ":"]
+  if {[lindex $dirs 0] ne $texbin} {
+    set ::env(PATH) "${texbin}:$::env(PATH)"
+  }
+  unset texbin
+  unset dirs
+}
+
 set ::instroot [exec kpsewhich -var-value=TEXMFROOT]
-source [file join $::instroot "tlpkg" "TeXLive" "tltcl.tcl"]
+
+# try to read a configuration variable (gui-lang, tkfontscale)
+# from tlmgr config ($TEXMF[SYS]CONFIG/tlmgr/config
+# failure results in an empty string.
+# this proc will be invoked by tltcl if tlshell is the invoker of tltcl
+proc get_config_var {k} {
+  set v ""
+  set r [join [list {^\s*} $k {\s*=\s*(\S.*)$}] ""]
+  foreach tmf {"TEXMFCONFIG" "TEXMFSYSCONFIG"} {
+    if [catch {exec kpsewhich -var-value $tmf} d] {
+        break; # apparently there is not yet a TL installation
+    }
+
+    if [catch {open [file join $d "tlmgr" "config"] r} fid] continue
+    while 1 {
+      if [chan eof $fid] {
+        break
+      }
+      if [catch {chan gets $fid} l] break
+      # we can assume that $k contains no special characters
+      if [regexp $r $l m v] {
+        set v [regsub {\s*$} $v ""]
+        break
+      } else {
+        # regexp will have unset v
+        set v ""
+      }
+    }
+    chan close $fid
+    if {$v ne ""} break
+  }
+  return $v
+}
+
+proc save_config_var {k v} {
+  if [catch {exec kpsewhich -var-value "TEXMFCONFIG"} d] {return 0}
+  set d [file join $d "tlmgr"]
+  if [catch {file mkdir $d}] {return 0} ; # mkdir on existing dir is ok
+  set fn [file join $d "config"]
+  set oldlines [list]
+  set r [join [list {^\s*} $k {\s*=\s*(\S.*)$}] ""]
+  # read current config file
+  if [file exists $fn] {
+    if [catch {open $fn r} fid] {return 0}
+    set cnt 0
+    while 1 {
+      if [catch {chan gets $fid} l] break
+      if [chan eof $fid] break
+      incr cnt
+      if {! [regexp $r $l]} {
+          lappend oldlines $l
+      }
+      if {$cnt>40} break
+    }
+    catch {chan close $fid}
+  }
+  lappend oldlines "$k = $v"
+  if [catch {open $fn w} fid] {return 0}
+  foreach l $oldlines {
+    if [catch {puts $fid $l}] {
+      catch {chan close $fid}
+      return 0
+    }
+  }
+  catch {chan close $fid}
+  return 1
+}
+
+# tltcl: declarations and utilities shared with install-tl-gui.tcl
+# tltcl likes to know who was the invoker
+set ::invoker [file tail [info script]]
+if [string match -nocase ".tcl" [string range $::invoker end-3 end]] {
+  set ::invoker [string range $::invoker 0 end-4]
+}
+source [file join $::instroot "tlpkg" "tltcl" "tltcl.tcl"]
+
+# now is a good time to ask tlmgr for the _TL_ name of our platform
+set ::our_platform [exec -ignorestderr tlmgr print-platform]
 
 # searchpath and locale:
-# windows: most scripts run via [w]runscript, which adjusts the searchpath
-# for the current process. The provided tcl/tk can set locale on the fly.
-# unix/linux:
-# we may need to run tlshell.tcl via a wrapper in order to
-# make localization work right for tcl/tk version 8.5 and on macos.
-# tlshell.[sh|tcl] should  be run via a symlink in a directory
+# windows: tlshell runs via a wrapper which adjusts the searchpath
+# for the current process.
+# others: tlshell.tcl should  be run via a symlink in a directory
 # which also contains (a symlink to) kpsewhich.
 # This directory will be prepended to the searchpath.
-# kpsewhich will disentangle symlinks.
+# kpsewhich should disentangle symlinks.
 
 # dis/enable the restore dialog
 set do_restore 0
@@ -55,11 +142,15 @@ if $ddebug {set dbg_log {}}
 
 proc do_debug {s} {
   if $::ddebug {
-    puts stderr $s
+    if {$::tcl_platform(platform) ne "windows"} {puts stderr $s}
     # On windows, stderr output goes nowhere.
-    # Therefore also debug output for the log toplevel.
+    # Therefore also debug output for the log dialog.
     lappend ::dbg_log $s
-    # Track debug output in the log toplevel if it is running:
+    file mkdir ${::instroot}/temp
+    set dbg [open "${::instroot}/temp/mydbglog" a]
+    puts $dbg "TCL: $s"
+    chan close $dbg
+    # Track debug output in the log dialog if it is running:
     if [winfo exists .tllg.dbg.tx] {
       .tllg.dbg.tx configure -state normal
       .tllg.dbg.tx insert end "$s\n"
@@ -70,6 +161,8 @@ proc do_debug {s} {
   }
 } ; # do_debug
 
+### temporary files and directories #########################
+
 proc maketemp {ext} {
   set fname ""
   foreach i {0 1 2 3 4 5 6 7 8 9} { ; # ten tries
@@ -78,7 +171,7 @@ proc maketemp {ext} {
     # create empty file. although we just want a name,
     # we must make sure that it can be created.
     set fid [open $fname w]
-    close $fid
+    chan close $fid
     if {! [file exists $fname]} {error "Cannot create temporary file"}
     if {$::tcl_platform(platform) eq "unix"} {
       file attributes $fname -permissions 0600
@@ -105,6 +198,11 @@ if [catch {ttk::style lookup TFrame -background} ::default_bg] {
   set ::default_bg white
 }
 
+# NOTE
+# text widgets aren't ttk widgets:
+# state disabled  => configure -state disabled
+# state !disabled => configure -state normal
+
 # dialog with textbox
 proc long_message {str type {p "."}} {
   # alternate messagebox implemented as custom dialog
@@ -113,9 +211,36 @@ proc long_message {str type {p "."}} {
     err_exit "Unsupported type $type for long_message"
   }
   create_dlg .tlmg $p
+  wm title .tlmg ""
 
   # wallpaper frame; see populate_main
   pack [ttk::frame .tlmg.bg] -fill both -expand 1
+
+  # buttons
+  pack [ttk::frame .tlmg.bts] -in .tlmg.bg -side bottom -fill x
+  if {$type eq "ok" || $type eq "okcancel"} {
+    ttk::button .tlmg.ok -text [__ "Ok"] -command "end_dlg \"ok\" .tlmg"
+    ppack .tlmg.ok -in .tlmg.bts -side right
+  }
+  if {$type eq "yesnocancel"} {
+    ttk::button .tlmg.yes -text [__ "Yes"] -command "end_dlg \"yes\" .tlmg"
+    ppack .tlmg.yes -in .tlmg.bts -side right
+    ttk::button .tlmg.no -text [__ "No"] -command "end_dlg \"no\" .tlmg"
+    ppack .tlmg.no -in .tlmg.bts -side right
+  }
+  if {$type eq "yesnocancel" || $type eq "okcancel"} {
+    ttk::button .tlmg.cancel -text [__ "Cancel"] -command \
+        "end_dlg \"cancel\" .tlmg"
+    ppack .tlmg.cancel -in .tlmg.bts -side right
+  }
+  if [winfo exists .tlmg.cancel] {
+    bind .tlmg <Escape> {.tlmg.cancel invoke}
+    wm protocol .tlmg WM_DELETE_WINDOW {cancel_or_destroy .tlmg.cancel .tlmg}
+  } elseif {$type eq "ok"} {
+    bind .tlmg <Escape> {.tlmg.ok invoke}
+    wm protocol .tlmg WM_DELETE_WINDOW {cancel_or_destroy .tlmg.ok .tlmg}
+  }
+
   ppack [ttk::frame .tlmg.tx] -in .tlmg.bg -side top -fill both -expand 1
   pack [ttk::scrollbar .tlmg.tx.scroll -command ".tlmg.tx.txt yview"] \
       -side right -fill y
@@ -125,25 +250,10 @@ proc long_message {str type {p "."}} {
   .tlmg.tx.txt insert end $str
   .tlmg.tx.txt configure -state disabled
 
-  # buttons
-  pack [ttk::frame .tlmg.bts] -in .tlmg.bg -side bottom -fill x
-  if {$type eq "ok" || $type eq "okcancel"} {
-    ttk::button .tlmg.ok -text [__ "ok"] -command "end_dlg \"ok\" .tlmg"
-    ppack .tlmg.ok -in .tlmg.bts -side right
-  }
-  if {$type eq "yesnocancel"} {
-    ttk::button .tlmg.yes -text [__ "yes"] -command "end_dlg \"yes\" .tlmg"
-    ppack .tlmg.yes -in .tlmg.bts -side right
-    ttk::button .tlmg.no -text [__ "no"] -command "end_dlg \"no\" .tlmg"
-    ppack .tlmg.no -in .tlmg.bts -side right
-  }
-  if {$type eq "yesnocancel" || $type eq "okcancel"} {
-    ttk::button .tlmg.cancel -text [__ "cancel"] -command \
-        "end_dlg \"cancel\" .tlmg"
-    ppack .tlmg.cancel -in .tlmg.bts -side right
-  }
-
+  # default resizable
   place_dlg .tlmg $p
+  tkwait window .tlmg
+  return $::dialog_ans
 } ; # long_message
 
 proc any_message {str type {p "."}} {
@@ -164,124 +274,120 @@ proc any_message {str type {p "."}} {
   }
 } ; # any_message
 
-### enabling and disabling user interaction
-
-proc enable_menu_controls {y_n} {
-  if {! $y_n} {
-    . configure -menu .mn_empty
-    return
-  }
-  . configure -menu .mn
-  if {! $::n_updates} {
-    .mn.pkg entryconfigure $::inx_upd_all -state disabled
-    .mn.pkg entryconfigure $::inx_upd_tlmgr -state disabled
-  } elseif $::need_update_tlmgr {
-    .mn.pkg entryconfigure $::inx_upd_all -state disabled
-    .mn.pkg entryconfigure $::inx_upd_tlmgr -state normal
-  } else {
-    .mn.pkg entryconfigure $::inx_upd_all -state normal
-    .mn.pkg entryconfigure $::inx_upd_tlmgr -state disabled
-  }
-  if {$::tcl_platform(platform) ne "windows"} {
-    if $::have_remote {
-      .mn.opt entryconfigure $::inx_platforms -state normal
-    } else {
-      .mn.opt entryconfigure $::inx_platforms -state disabled
-    }
-  }
-}; # enable_menu_controls
-
-proc enable_widgets {y_n} {
-  # This proc should cover all active interface elements of the main window.
-  # But if actions are initiated via a dialog, the main window can be
-  # deactivated by a grab and focus on the dialog instead.
-  enable_menu_controls $y_n
-
-  if $y_n {
-    set st !disabled
-    set ::busy [__ "IDLE"]
-  } else {
-    set st disabled
-    set ::busy [__ "BUSY"]
-  }
-
-  # command entry
-  .ent.b configure -state $st
-  .ent.e configure -state $st
-
-  # filter options
-  # status
-  .pkfilter.inst configure -state $st
-  .pkfilter.alls configure -state $st
-  .pkfilter.upd configure -state $st
-  # detail
-  .pkfilter.alld configure -state $st
-  .pkfilter.coll configure -state $st
-  .pkfilter.schm configure -state $st
-
-  # mark commands
-  .mrk_all configure -state $st
-  .mrk_none configure -state $st
-
-  # search
-  .pksearch.e configure -state $st
-  .pksearch.d configure -state $st
-
-  # packages
-  #.pkglist configure -state $st
-  .pkglist state $st
-
-  # final buttons
-  .q configure -state $st
-  .r configure -state $st
-  .t configure -state $st
-  .showlogs configure -state $st
-} ; # enable_widgets
-
 ##### tl global data ##################################################
 
-set last_cmd ""
+set ::last_cmd ""
 
-set progname [info script]
-regexp {^.*[\\/]([^\\/\.]*)(?:\....)?$} $progname dummy progname
-set procid [pid]
+set ::progname [info script]
+regexp {^.*[\\/]([^\\/\.]*)(?:\....)?$} $progname dummy ::progname
+set ::procid [pid]
 
 # package repositories
-array unset repos
+array unset ::repos
 
 # mirrors: dict of dicts of lists of urls per country per continent
-set mirrors {}
+# moved to tltcl.tcl
+#set ::mirrors [dict create]
 
 # dict of (local and global) package dicts
-set pkgs [dict create]
+set ::pkgs [dict create]
 
-if {$::tcl_platform(platform) ne "windows"} {
-  set ::platforms [dict create]
-}
+# platforms
+set ::platforms [dict create]
 
-set have_remote 0 ; # remote packages info not yet loaded
-set need_update_tlmgr 0
-set n_updates 0
-set tlshell_updatable 0
+set ::have_remote 0 ; # remote packages info not yet loaded
+set ::need_update_tlmgr 0
+set ::n_updates 0
+set ::tlshell_updatable 0
 
-## data to be displayed ##
+## package data to be displayed ##
 
 # sorted display data for packages; package data stored as lists
-set filtered [dict create]
+set ::filtered [dict create]
 
 # selecting packages for display: status and detail
-set stat_opt "inst"
-set dtl_opt "all"
+set ::stat_opt "inst"
+set ::dtl_opt "all"
 # searching packages for display; also search short descriptions?
-set search_desc 0
+set ::search_desc 0
+
+### enabling and disabling user interaction based on global data
+
+proc selective_dis_enable {} {
+  # disable actions which make no sense at the time
+
+  # buttons in the middle section
+  set pkg_buttons [list .mrk_inst .mrk_upd .mrk_rem .upd_tlmgr .upd_all]
+  foreach b [list .mrk_inst .mrk_upd .mrk_rem .upd_tlmgr .upd_all] {
+    $b state !disabled
+  }
+  if $::do_restore {.mrk_rest state !disabled}
+
+  if {!$::have_remote} {
+    foreach b [list .mrk_inst .mrk_upd .upd_tlmgr .upd_all] {
+      $b state disabled
+    }
+  } elseif {!$::n_updates} {
+    foreach b [list .mrk_upd .upd_tlmgr .upd_all] {
+      $b state disabled
+    }
+  } elseif $::need_update_tlmgr {
+    foreach b [list .mrk_inst .mrk_upd] {
+      $b state disabled
+    }
+    if {$::tcl_platform(platform) eq "windows"} {
+      .upd_all state disabled
+    }
+  } elseif {!$::need_update_tlmgr} {
+    .upd_tlmgr state disabled
+  }
+
+  # platforms menu item
+  if {$::tcl_platform(platform) ne "windows"} {
+    if {!$::have_remote || $::need_update_tlmgr}  {
+      .mn.opt entryconfigure $::inx_platforms -state disabled
+    } else {
+      .mn.opt entryconfigure $::inx_platforms -state normal
+    }
+  }
+}; # selective_dis_enable
+
+proc total_dis_enable {y_n} {
+  # to be invoked when tlmgr becomes busy or idle, i.e.
+  # if it starts with a tlmgr command through run_cmds
+  # or read_line notices the command(s) ha(s|ve) ended.
+  # This proc should cover all active interface elements of the main window.
+  # But if actions are initiated via a dialog, the main window can instead
+  # be deactivated by a grab and focus on the dialog.
+
+  if {!$y_n} { ; # disable
+    set ::busy [__ "Running"]
+    . configure -menu .mn_empty
+    foreach c [winfo children .] {
+      if {$c ne ".showlogs" && [winfo class $c] in $::active_cls} {
+        # this should cover all relevant widgets in the main window
+        $c state disabled
+      }
+    }
+  } else { ; # enable
+    . configure -menu .mn
+    foreach c [winfo children .] {
+      if {[winfo class $c] in $::active_cls} {
+        $c state !disabled
+      }
+    }
+    set ::busy [__ "Idle"]
+    selective_dis_enable
+  }
+} ; # total_dis_enable
 
 ##### handling tlmgr via pipe and stderr tempfile #####################
 
-set prmpt "tlmgr>"
-set busy [__ "BUSY"]
+set ::prmpt "tlmgr>"
+set ::busy [__ "Running"]
 
 # copy logs to log window yes/no
-set show_output 0
+set ::show_output 0
 
 # about [chan] gets:
 # if a second parameter, in this case l, is supplied
@@ -290,20 +396,25 @@ set show_output 0
 # EOF is indicated by a return value of -1.
 
 proc read_err_tempfile {} {
-  set len 0
-  while 1 {
-    set len [chan gets $::err l]
-    if {$len >= 0} {
-      lappend ::err_log $l
-    } else {
-      break
+  if [info exists ::err] {
+    set len 0
+    while 1 {
+      set len [chan gets $::err l]
+      if {$len >= 0} {
+        lappend ::err_log $l
+      } else {
+        break
+      }
     }
   }
 } ; # read_err_tempfile
 
-proc err_exit {} {
+proc err_exit {{m ""}} {
   do_debug "error exit"
   read_err_tempfile
+  if {$m ne ""} {
+    set ::err_log [linsert $::err_log 0 $m]
+  }
   any_message [join $::err_log "\n"] "ok"
   exit
 } ; # err_exit
@@ -317,9 +428,14 @@ proc start_tlmgr {{args ""}} {
   # to process initial tlmgr output before continuing.
   unset -nocomplain ::done_waiting
   do_debug "opening tlmgr"
-  if [catch \
-          {open "|tlmgr $args --machine-readable shell 2>>$::err_file" w+} \
-          ::tlshl] {
+  # -gui -. -gui-lang
+  for {set i 0} {$i < [llength $args]} {incr i} {
+    if {[lindex $args $i] eq "-lang"} {
+      set args [lreplace $args $i $i "-gui-lang"]
+    }
+  }
+  set cmd [list "|tlmgr" {*}$args "--machine-readable" "shell" 2>>$::err_file]
+  if [catch {open $cmd w+} ::tlshl] {
     tk_messageBox -message [get_stacktrace]
     exit
   }
@@ -332,10 +448,8 @@ proc start_tlmgr {{args ""}} {
 } ; # start_tlmgr
 
 proc close_tlmgr {} {
-  catch {chan close $::tlshl}
-  catch {chan close $::err}
-  set ::perlpid 0
-}; # close_tlmgr
+  run_cmd_waiting "quit"
+}
 
 # read a line of tlmgr output
 proc read_line {} {
@@ -343,18 +457,27 @@ proc read_line {} {
   # if it wants to wait for the command to finish
   set l "" ; # will contain the line to be read
   if {([catch {chan gets $::tlshl l} len] || [chan eof $::tlshl])} {
-    #do_debug "read_line: failing to read "
-    puts stderr "Read failure; tlmgr command was $::last_cmd"
-    if {! [catch {chan close $::tlshl}]} {set ::perlpid 0}
-    # note. the right way to terminate is terminating the GUI shell.
-    # This closes stdin of tlmgr shell.
-    err_exit
+    # copy as much of stderr as possible to ::err_log
+    catch {read_err_tempfile ; chan close $::err}
+    if [chan eof $::tlshl] {
+      catch {chan close $::tlshl}
+      unset -nocomplain ::tlshl
+      unset -nocomplain ::err
+      set ::perlpid 0
+      set ::done_waiting 1
+    } else {
+      #do_debug "read_line: failing to read "
+      puts stderr "Read failure; tlmgr command was $::last_cmd"
+      # note. the normal way to terminate is terminating the GUI shell.
+      # This closes stdin of tlmgr shell.
+      err_exit
+    }
   } elseif {$len >= 0} {
     # do_debug "read: $l"
     if $::ddebug {puts $::flid $l}
     if {[string first $::prmpt $l] == 0} {
       # prompt line: we are done with the current command
-      enable_widgets 1 ; # this may have to be redone later
+      total_dis_enable 1 ; # this may have to be redone later
       # catch up with stderr
       read_err_tempfile
       if $::show_output {
@@ -374,8 +497,8 @@ proc read_line {} {
   }
 } ; # read_line
 
-# copy error strings to error page in logs toplevel .tllg and send it to top.
-# This by itself does not map the logs toplevel .tllg
+# copy error strings to error page in logs dialog .tllg and send it to top.
+# This by itself does not map the logs dialog .tllg
 
 proc show_err_log {} {
   #do_debug "show_err_log"
@@ -394,8 +517,8 @@ proc show_err_log {} {
 
 proc log_widget_init {} {
   show_logs ; # create the logs dialog
-  .tllg.status configure -text [__ "Running"]
-  .tllg.close configure -state disabled
+  set ::busy [__ "Running"]
+  .tllg.close state disabled
 }
 
 proc log_widget_add l {
@@ -414,8 +537,9 @@ proc log_widget_finish {} {
   if {$::tcl_platform(os) ne "Darwin"} {
     .tllg.log.tx configure -state disabled
   }
-  .tllg.status configure -text [__ "Idle"]
-  .tllg.close configure -state !disabled
+  set ::busy [__ "Idle"]
+  .tllg.close state !disabled
+  bind .tllg <Escape> {.tllg.close invoke}
 }
 
 ##### running tlmgr commands #####
@@ -425,19 +549,25 @@ proc run_cmds {cmds {show 0}} {
   set ::show_output $show
   do_debug "run_cmds \"$cmds\""
   if $::ddebug {puts $::flid "\n$cmds"}
-  enable_widgets 0
   set ::out_log {}
   set ::err_log {}
   if $show {
     show_logs
     .tllg.status configure -text [__ "Running"]
-    .tllg.close configure -state disabled
+    .tllg.close state disabled
   }
   set l [llength $cmds]
   for {set i 0} {$i<$l} {incr i} {
+    if {! [info exists ::tlshl]} {
+      err_exit "Back end gone. Last command: \n  $::last_cmd"
+    }
     set cmd [lindex $cmds $i]
     set ::last_cmd $cmd
     unset -nocomplain ::done_waiting
+    # disable widgets for each new command,
+    # since read_line will re-enable them
+    # when a particular command is finished
+    total_dis_enable 0
     chan puts $::tlshl $cmd
     chan flush $::tlshl
     if {$i < [expr {$l-1}]} {vwait ::done_waiting}
@@ -472,40 +602,37 @@ proc run_cmd_waiting {cmd} {
 
 # displayed global status info is updated by update_globals.
 # update button/menu states are set at initialization and updated
-# by update_globals, both via the enable_menu_controls proc
+# by update_globals, both via the selective_dis_enable proc
+
+# The repositories play a small part in this front end. Tlmgr mostly works
+# with a virtual repository, which is the combined set of repositories,
+# with pinning applied if there is more than one repository.
+# But get_packages_info_remote must invoke
+# show_repos to display updated verification info.
+# show_repos is also invoked by initialize.
 
 # get_packages_info_local is invoked only once, at initialization.  After
 # installations and removals, the collected information is updated by
 # update_local_revnumbers.
+# Both procs also invoke get_platforms
 
-# get_packages_info_remote will be invoked by collect_filtered if
-# ::have_remote is false. Afterwards, ::have_remote will be true, and
-# therefore get_packages_info_remote will not be called again.
-# get_packages_info_remote invokes update_globals.
+# get_packages_info_remote should be invoked before collect_filtered if
+# ::have_remote is false. Afterwards, ::have_remote will be true.
+# There will be no need to invoke get_packages_info_remote again except
+# at a change of repository by repos_commit.
+# get_packages_info_remote invokes update_globals, show_repos
+# and get_platforms.
 
 # update_local_revnumbers will be invoked after any updates. It also
 # invokes update_globals.
 
 # collect_filtered does not only filter, but also organize the
-# information to be displayed.  If necessary, it invokes
-# get_packages_info_remote and always invokes display_packages_info.
+# information to be displayed. It invokes display_packages_info.
 # It is invoked at initialization, when filtering options change and
 # at the end of install-, remove- and update procs.
 
 # display_packages_info is mostly invoked by collect_filtered, but
 # also when the search term or the search option changes.
-
-proc check_tlmgr_updatable {} {
-  run_cmd_waiting "update --self --list"
-  foreach l $::out_log {
-    if [regexp {^total-bytes[ \t]+([0-9]+)$} $l m b] {
-      do_debug "matches, $b"
-      set ::need_update_tlmgr [expr {$b > 0 ? 1 : 0}]
-      return
-    }
-  }
-  do_debug "check_tlmgr_uptodate: should not get here"
-} ; # check_tlmgr_uptodate
 
 proc is_updatable {nm} {
   set pk [dict get $::pkgs $nm]
@@ -514,25 +641,29 @@ proc is_updatable {nm} {
   return [expr {$lr > 0 && $rr > 0 && $rr > $lr}]
 }
 
+proc display_updated_globals {} {
+  if {$::have_remote && $::need_update_tlmgr} {
+    .topfll.luptodate configure -text [__ "Needs updating"]
+  } elseif $::have_remote {
+    .topfll.luptodate configure -text [__ "Up to date"]
+  } else {
+    .topfll.luptodate configure -text [__ "Unknown"]
+  }
+  # ... and status of update buttons
+  selective_dis_enable
+}
+
 proc update_globals {} {
   if {! $::have_remote} return
   set ::n_updates 0
   foreach nm [dict keys $::pkgs] {
     if [is_updatable $nm] {incr ::n_updates}
   }
-  check_tlmgr_updatable
+  set ::need_update_tlmgr [is_updatable texlive.infra]
   set ::tlshell_updatable [is_updatable tlshell]
 
   # also update displayed status info
-  if {$::have_remote && $::need_update_tlmgr} {
-    .topf.luptodate configure -text [__ "Needs updating"]
-  } elseif $::have_remote {
-    .topf.luptodate configure -text [__ "Up to date"]
-  } else {
-    .topf.luptodate configure -text [__ "Unknown"]
-  }
-  # ... and status of update buttons
-  enable_menu_controls 1
+  display_updated_globals
 }
 
 # The package display treeview widget in the main window has columns
@@ -575,8 +706,9 @@ proc display_packages_info {} {
 proc collect_filtered {} {
   do_debug \
       "collect_filtered for $::stat_opt and $::dtl_opt"
+  # test this beforehand
   if {$::stat_opt ne "inst" && ! $::have_remote} {
-    get_packages_info_remote
+    err_exit "collect_filtered should not have been invoked at this time"
   }
   foreach nm [dict keys $::filtered] {
     dict unset ::filtered $nm
@@ -623,8 +755,28 @@ proc collect_filtered {} {
     dict lappend ::filtered $nm $v
     dict lappend ::filtered $nm [dict get $pk shortdesc]
   }
-  display_packages_info
 } ; # collect_filtered
+
+proc collect_and_display_filtered {} {
+  collect_filtered
+  display_packages_info
+}
+
+proc get_platforms {} {
+  # guarantee fresh start
+  foreach k $::platforms {dict unset ::platforms $k}
+  set ::platforms [dict create]
+  run_cmd_waiting "platform list"
+  foreach l $::out_log {
+    if [regexp {^\(i\)\s+(\S+)\s*$} $l dum plname] {
+      set pl [dict create "cur" 1 "fut" 1]
+      dict set ::platforms $plname $pl
+    } elseif [regexp {^\s+(\S+)\s*$} $l dum plname] {
+      set pl [dict create "cur" 0 "fut" 0]
+      dict set ::platforms $plname $pl
+    }
+  }
+}
 
 # get fresh package list. invoked at program start
 # some local packages may not be available online.
@@ -656,7 +808,86 @@ proc get_packages_info_local {} {
                "rcatv" 0 "category" $catg shortdesc $pdescr]
     }
   }
+  get_platforms
 } ; # get_packages_info_local
+
+proc abort_load {} {
+  # try to close back end forcibly
+  catch {chan close $::tlshl}
+  if {$::tcl_platform(platform) eq "windows"} {
+    catch {exec -ignorestderr taskkill /pid $::perlpid /t /f}
+  } else {
+    catch {exec -ignorestderr kill -9 $::perlpid}
+    # should also be ok for darwin
+  }
+  # start new tlshell process
+  exec $::progname &
+
+  # end current tlshell process nicely
+  exit
+  # kill current tlshell process forcibly if necessary
+  if {$::tcl_platform(platform) eq "windows"} {
+    catch {exec -ignorestderr taskkill /pid [pid] /t /f}
+  } else {
+    catch {exec -ignorestderr kill -9 [pid]}
+  }
+} ; # abort load
+
+# toplevel with abort button in case loading of a repository takes too long.
+# it can be closed when loading finishes
+proc splash_loading {} {
+
+  create_dlg .loading .
+
+  wm title .loading [__ "Loading"]
+
+  # wallpaper
+  pack [ttk::frame .loading.bg -padding 3] -fill both -expand 1
+
+  set lbl [__ \
+       "If loading takes too long, press Abort and choose another repository."]
+  append lbl "\n([__ "Options"] \/ [__ "Repositories"] ...)"
+  ppack [ttk::label .loading.l0 -text $lbl \
+           -wraplength [expr {60*$::cw}] -justify left] \
+    -in .loading.bg -anchor w
+
+  pack [ttk::frame .loading.tfr] -in .loading.bg -expand 1 -fill x
+  pack [ttk::scrollbar .loading.scroll -command ".loading.tx yview"] \
+      -in .loading.tfr -side right -fill y
+  ppack [text .loading.tx -height 5 -wrap word \
+            -yscrollcommand ".loading.scroll set"] \
+      -in .loading.tfr -expand 1 -fill both
+  pack [ttk::frame .loading.buttons] -in .loading.bg -expand 1 -fill x
+  ttk::button .loading.close -text [__ "Close"] -command {end_dlg "" .loading}
+  ppack .loading.close -in .loading.buttons -side right
+  .loading.close configure -state disabled
+  ttk::button .loading.abo -text [__ "Abort"] -command abort_load
+  ppack .loading.abo -in .loading.buttons -side right
+  wm protocol .loading {cancel_or_destroy .loading.abo .loading}
+  wm resizable .loading 0 0
+  place_dlg .loading .
+} ; # splash_loading
+
+
+proc track_err {} {
+  set inx0 [llength $::err_log]
+  read_err_tempfile
+  .loading.tx configure -state normal
+  for {set i $inx0} {$i < [llength $::err_log]} {incr i} {
+    .loading.tx insert end "[lindex $::err_log $i]\n"
+  }
+  .loading.tx configure -state disabled
+  update idletasks
+  if {![info exists ::loaded]} {
+    after 500 track_err
+  } else {
+    .loading.close state !disabled
+    .loading.abo state disabled
+    .loading.tx configure -state normal
+    .loading.tx insert end [__ "Done loading"]
+    .loading.tx configure -state disabled
+  }
+}
 
 # remote: preserve information on installed packages
 proc get_packages_info_remote {} {
@@ -670,15 +901,23 @@ proc get_packages_info_remote {} {
   set ::updatable 0
   set ::tlshell_updatable 0
 
-  if [catch {run_cmd_waiting \
-    "info --data name,localrev,remoterev,cat-version,category,shortdesc"}] {
+  splash_loading
+
+  unset -nocomplain ::loaded
+  track_err
+  set catv "rcat-version"
+  if {[dict get $::pkgs texlive.infra localrev] < 56458} { set catv "cat-version" }
+  if [catch {run_cmd \
+    "info --data name,remoterev,$catv,category,shortdesc"}] {
     do_debug [get_stacktrace]
     tk_messageBox -message [__ "A configured repository is unavailable."]
     return 0
   }
-  set re {^([^,]+),([0-9]+),([0-9]+),([^,]*),([^,]*),(.*)$}
+  vwait ::done_waiting
+  set ::loaded 1
+  set re {^([^,]+),([0-9]+),([^,]*),([^,]*),(.*)$}
   foreach l $::out_log {
-    if [regexp $re $l m nm lrev rrev rcatv catg pdescr] {
+    if [regexp $re $l m nm rrev rcatv catg pdescr] {
       # double-quotes in short description: remove outer, unescape inner
       if {[string index $pdescr 0] eq "\""} {
         set pdescr [string range $pdescr 1 end-1]
@@ -694,16 +933,20 @@ proc get_packages_info_remote {} {
       dict set ::pkgs $nm "shortdesc" $pdescr
     }
   }
+  get_platforms ; # derive from $::pkgs
+
   set ::have_remote 1
-  .topf.loaded configure -text "Loaded"
   update_globals
+  show_repos
   return 1
 } ; # get_packages_info_remote
 
 ## update ::pkgs after installing packages without going online again.
 proc update_local_revnumbers {} {
   do_debug "update_local_revnumbers"
-  run_cmd_waiting "info --only-installed --data name,localrev,cat-version"
+  set catv "lcat-version"
+  if {[dict get $::pkgs texlive.infra localrev] < 56458} { set catv "cat-version" }
+  run_cmd_waiting "info --only-installed --data name,localrev,$catv"
   set re {^([^,]+),([0-9]+),(.*)$}
   dict for {pk pk_dict} $::pkgs {
     do_debug "zeroing local data for $pk"
@@ -716,9 +959,11 @@ proc update_local_revnumbers {} {
       set pk_dict [dict get $::pkgs $pk]
       dict set pk_dict "localrev" $lr
       dict set pk_dict "lcatv" $lv
+      dict set pk_dict "rcatv" $lv
       dict set ::pkgs $pk $pk_dict
     }
   }
+  get_platforms
   update_globals
 } ; # update_local_revnumbers
 
@@ -726,7 +971,7 @@ proc update_local_revnumbers {} {
 
 # if invoked via run_cmds, it tracks progress of (a) tlmgr command(s).
 # run_cmds will temporarily disable the close button
-# and set .tllg.status to busy via enable_widgets 0.
+# and set .tllg.status to busy via total_dis_enable 0.
 # otherwise, it shows the output of the last completed (list of) command(s).
 
 # Note that run_cmds clears ::out_log and ::err_log, but not ::dbg_log.
@@ -738,6 +983,17 @@ proc show_logs {} {
   # wallpaper
   pack [ttk::frame .tllg.bg] -fill both -expand 1
 
+  # close button and busy label
+  pack [ttk::frame .tllg.bottom] -in .tllg.bg -side bottom -fill x
+  ttk::button .tllg.close -text [__ "Close"] -command {end_dlg 0 .tllg}
+  ppack .tllg.close -in .tllg.bottom -side right -anchor e
+  ppack [ttk::label .tllg.status -textvariable ::busy -anchor w] \
+      -in .tllg.bottom -side left
+  bind .tllg <Escape> {.tllg.close invoke}
+  wm protocol .tllg WM_DELETE_WINDOW \
+      {cancel_or_destroy .tllg.close .tllg}
+
+  # notebook pages and scrollbars
   ttk::frame .tllg.log
   pack [ttk::scrollbar .tllg.log.scroll -command ".tllg.log.tx yview"] \
       -side right -fill y
@@ -782,9 +1038,10 @@ proc show_logs {} {
     .tllg.dbg.tx yview moveto 1
   }
 
+  # collect pages in notebook widget
   pack [ttk::notebook .tllg.logs] -in .tllg.bg -side top -fill both -expand 1
   .tllg.logs add .tllg.log -text [__ "Output"]
-  .tllg.logs add .tllg.err -text [__ "Errors"]
+  .tllg.logs add .tllg.err -text [__ "Other"]
   if $::ddebug {
     .tllg.logs add .tllg.dbg -text "Debug"
     raise .tllg.dbg .tllg.logs
@@ -792,170 +1049,36 @@ proc show_logs {} {
   raise .tllg.err .tllg.logs
   raise .tllg.log .tllg.logs
 
-  pack [ttk::frame .tllg.bottom] -in .tllg.bg -side bottom -fill x
-  ttk::button .tllg.close -text [__ "Close"] -command {end_dlg 0 .tllg}
-  ppack .tllg.close -in .tllg.bottom -side right -anchor e
-  ppack [ttk::label .tllg.status -anchor w] -in .tllg.bottom -side left
-
+  # default resizable
   place_dlg .tllg .
-  wm resizable .tllg 1 1
 } ; # show_logs
 
 ##### repositories ###############################################
 
 ### mirrors
-
-# turn name into a string suitable for a widget name
-proc mangle_name {n} {
-  set n [string tolower $n]
-  set n [string map {" "  "_"} $n]
-  return $n
-} ; # mangle_name
-
-set mirrors [dict create]
-proc read_mirrors {} {
-  if [catch {open [file join [exec kpsewhich -var-value SELFAUTOPARENT] \
-                   "tlpkg/installer/ctan-mirrors.pl"] r} fm] {
-    do_debug "cannot open mirror list"
-    return 0
-  }
-    set re_geo {^\s*'([^']+)' => \{\s*$}
-  set re_url {^\s*'(.*)' => ([0-9]+)}
-  set re_clo {^\s*\},?\s*$}
-  set starting 1
-  set lnum 0 ; # line number for error messages
-  set ok 1 ; # no errors encountered yet
-  set countries {} ; # aggregate list of countries
-  set urls {} ; # aggregate list of urls
-  set continent ""
-  set country ""
-  set u ""
-  set in_cont 0
-  set in_coun 0
-  while {! [catch {chan gets $fm} line] && ! [chan eof $fm]} {
-    incr lnum
-    if $starting {
-      if {[string first "\$mirrors =" $line] == 0} {
-        set starting 0
-        continue
-      } else {
-        set ok 0
-        set msg "Unexpected line '$line' at start"
-        break
-      }
-    }
-    # starting is now dealt with.
-    if [regexp $re_geo $line dummy c] {
-      if {! $in_cont} {
-        set in_cont 1
-        set continent $c
-        set cont_dict [dict create]
-        if {$continent in [dict keys $::mirrors]} {
-          set ok 0
-          set msg "Duplicate continent $c at line $lnum"
-          break
-        }
-      } elseif {! $in_coun} {
-        set in_coun 1
-        set country $c
-        if {$country in $countries} {
-          set ok 0
-          set msg "Duplicate country $c at line $lnum"
-          break
-        }
-        lappend countries $country
-        dict set cont_dict $country {}
-      } else {
-        set ok 0
-        set msg "Unexpected continent- or country line $line at line $lnum"
-        break
-      }
-    } elseif [regexp $re_url $line dummy u n] {
-      if {! $in_coun} {
-        set ok 0
-        set msg "Unexpected url line $line at line $lnum"
-        break
-      } elseif {$n ne "1"} {
-        continue
-      }
-      append u "systems/texlive/tlnet"
-      if {$u in $urls} {
-          set ok 0
-          set msg "Duplicate url $u at line $lnum"
-          break
-      }
-      dict lappend cont_dict $country $u
-      lappend urls $u
-      set u ""
-    } elseif [regexp $re_clo $line] {
-      if $in_coun {
-        set in_coun 0
-        set country ""
-      } elseif $in_cont {
-        set in_cont 0
-        dict set ::mirrors $continent $cont_dict
-        set continent ""
-      } else {
-        break ; # should close mirror list
-      }
-    } ; # ignore other lines
-  }
-  close $fm
-  if {! $ok} {do_debug $msg}
-} ; # read_mirrors
+#mangle_name {n} {} ; moved to tltcl.tcl
+#proc read_mirrors {} {} ; moved to tltcl.tcl
 
 proc pick_local_repo {} {
-  set tail "tlpkg/texlive.tlpdb"
-  set nrep [.tlr.cur cget -text]
-  if {! [file exists [file join $nrep $tail]]} {
-    # not local, try originally configured $::repos(main)
-    set nrep $::repos(main)
-    if {! [file exists [file join $nrep $tail]]} {
-      # again, not local
-      set nrep $::env(HOME) ; # HOME also o.k. for windows
-    }
+  set nw_repo [.tlr.cur cget -text]
+  if {! [file isdirectory $nw_repo]} {
+    set nw_repo $::env(HOME) ; # HOME also o.k. for windows
   }
   while 1 {
-    set nrep [browse4dir $nrep .tlr]
-    if {$nrep ne "" && ! [file exists [file join $nrep $tail]]} {
-      tk_messageBox -message [__ "%s not a repository" $nrep] -parent .tlr
+    set nw_repo [browse4dir $nw_repo .tlr]
+    if {$nw_repo ne "" && ! [possible_repository $nw_repo]} {
+      tk_messageBox -message [__ "%s not a repository" $nw_repo] -parent .tlr
       continue
     } else {
+      .tlr.save state !disabled
       break
     }
   }
-  if {$nrep ne ""} {
+  if {$nw_repo ne ""} {
     .tlr.new delete 0 end
-    .tlr.new insert end $nrep
+    .tlr.new insert end $nw_repo
   }
 } ; # pick_local_repo
-
-# what is wrong with this version?
-#proc get_repos_from_tlmgr {} {
-#  array unset ::repos
-#  run_cmd_waiting "repository list"
-#  # set re0 {^\s+([^\s\(][^\(]*[^\s\(])\s+\(([^\)]+)\)$}
-#  set re0 {^[ \t]+(\S.*\S)[ \t]+\(([^\)]+)\)$}
-#  set re1 {^[ \t]+(\S.*\S)$}
-#  foreach l $::out_log {
-#    if [regexp $re0 $l dum r t] {
-#      # repository with tag
-#      puts "$l\n$dum\nrep $r tag $t"
-#      set ::repos($t) $r
-#    } elseif [regexp $re1 $l dum r] {
-#      # repository without tag, assign repository itself as tag
-#      puts "rep $r"
-#      set ::repos($r) $r
-#    }
-#  }
-#  if {[llength [array names ::repos]] == 1} {
-#    set n [lindex [array names ::repos] 0]
-#    if {$n ne "main"} {
-#      set ::repos(main) $::repos($n)
-#      array unset ::repos $n
-#    }
-#  }
-#} ; # get_repos_from_tlmgr
 
 proc get_repos_from_tlmgr {} {
   array unset ::repos
@@ -969,8 +1092,8 @@ proc get_repos_from_tlmgr {} {
     set nr [llength $reps]
     foreach rp $reps {
       # decode spaces and %
-      #set rp [string map {"%20" " "} $rp]
-      #set rp [string map {"%25" "%"} $rp]
+      set rp [string map {"%20" " "} $rp]
+      set rp [string map {"%25" "%"} $rp]
       if {! [regexp {^(.+)#(.+)$} $rp dum r t]} {
         # no tag; use repository as its own tag
         set r $rp
@@ -989,8 +1112,10 @@ proc get_repos_from_tlmgr {} {
 
 proc set_repos_in_tlmgr {} {
   # tlmgr has no command to replace a single repository;
-  # we need to compose opt_location ourselves from $::repos.
-  set nr [llength [array names ::repos]]
+  # we need to compose a string for opt_location ourselves from $::repos.
+  # a single repository should not get a tag.
+  # apparently, we can safely ignore bogus pinning data.
+  set nr [array size ::repos]
   set opt_repos ""
   set rp ""
   foreach nm [array names ::repos] {
@@ -998,6 +1123,7 @@ proc set_repos_in_tlmgr {} {
       if {$nm ne "main"} {
         err_exit "Internal error"
       } else {
+        # pinning command only supported for multiple repositories
         set rp $::repos(main)
       }
     } else {
@@ -1008,50 +1134,140 @@ proc set_repos_in_tlmgr {} {
         append rp "#$nm"
       }
     }
-    # for now, ignore the possibility of spaces in paths;
-    # I think tlmgr has bugs there
-    #set rp [string map {"%" "%25"} $rp]
-    #set rp [string map {" " "%20"} $rp]
+    # encode % and spaces
+    set rp [string map {"%" "%25"} $rp]
+    set rp [string map {" " "%20"} $rp]
     append opt_repos " $rp"
   }
-  # puts "repository set [string range $opt_repos 1 end]"
   run_cmd_waiting "repository set [string range $opt_repos 1 end]"
 }; # set_repos_in_tlmgr
 
-proc print_repos {} {
+proc show_repos {} {
+  # this proc lists the configured repository/ies
+  # in the upper left portion of the main window.
+  # it makes one call to the back end, but no need to go online.
+  set w .toprepo
+  foreach ch [winfo children $w] {destroy $ch}
   set nms [array names ::repos]
   set c [llength $nms]
+  grid [ttk::label $w.head -font TkHeadingFont] \
+      -row 0 -column 0 -columnspan 2 -sticky w
   if {$c <= 0} {
-    return ""
+    $w.head configure -text [__ "No repositories"]
+     return
   } elseif {$c == 1} {
-    set nm [lindex $nms 0]
-    return $::repos($nm)
+    $w.head configure -text [__ "Repository"]
   } else {
-    set s [__ "multiple repositories"]
-    set s "($s)"
-    foreach nm $nms {
-      append s "\n$::repos($nm)"
-      if {$nm ne $::repos($nm)} {append s " ($nm)"}
+    $w.head configure -text [__ "Multiple repositories"]
+  }
+  if {! $::have_remote} {
+    pgrid [ttk::label $w.load -text [__ "Not loaded"]] \
+        -sticky nw -row 0 -column 1
+  }
+  set repodict [dict create]
+  if $::have_remote {
+    run_cmd_waiting "repository status"
+    set re {^(\S+) (\S+)/tlpkg/texlive.tlpdb (-?\d+) (.*)$}
+    foreach l $::out_log {
+      if [regexp $re $l dum nm rp n d] {
+        # dummy tag repository verification_code description
+        # restore spaces and percent characters in nm and rp
+        set nm [string map {"%20" " "} $nm]
+        set nm [string map {"%25" "%"} $nm]
+        set rp [string map {"%20" " "} $rp]
+        set rp [string map {"%25" "%"} $rp]
+        dict set repodict $nm "url" $rp
+        dict set repodict $nm "vericode" $n
+        dict set repodict $nm "veridescr" $d
+      }
     }
-    return $s
+  }
+  set rw 0
+  foreach nm [array names ::repos] {
+    incr rw
+    pgrid [ttk::label $w.u$nm -text $::repos($nm) -justify left] \
+        -sticky nw -row $rw -column 0
+    if {$::repos($nm) eq $::any_mirror && $::have_remote} {
+      set s $::repos($nm)
+      append s "\n[__ "Actual repository"]:\n"
+      append s [dict get $repodict $nm "url"]
+      $w.u$nm configure -text $s
+    }
+    if {[array size ::repos] > 1 && $nm ne $::repos($nm)} {
+      pgrid [ttk::label $w.n$nm -text "($nm)"] \
+        -sticky nw -row $rw -column 1
+    }
+    if $::have_remote {
+      pgrid [ttk::label $w.v$nm -text \
+                "verification: [dict get $repodict $nm "veridescr"]"] \
+            -sticky nw -row $rw -column 2
+    }
+  }
+} ; # show_repos
+
+proc repos_commit {} {
+  set changes 0
+  # set repositories then add pinning if appropriate
+  set new_repo [forward_slashify [.tlr.new get]]
+  if {! [regexp {^\s*$} $new_repo]} {
+    # repository entry widget non-empty: use it
+    if {$::repos(main) ne $new_repo} {
+      set ::repos(main) $new_repo
+      set changes 1
+    }
+  }
+  set had_contrib 0
+  if $::toggle_contrib {
+    set changes 1
+    foreach nm [array names ::repos] {
+      if {$::repos($nm) eq $::tlcontrib} {
+        set had_contrib 1
+        run_cmds [list "pinning remove $nm --all" \
+                      "pinning remove $::repos($nm) --all"] 0
+        vwait ::done_waiting
+        array unset ::repos $nm
+      }
+    }
+    if {! $had_contrib} {
+      set ::repos(tlcontrib) $::tlcontrib
+    }
+  }
+  if $changes {
+    set_repos_in_tlmgr
+    close_tlmgr
+    start_tlmgr
+    if {$::toggle_contrib && ! $had_contrib} {
+      run_cmd_waiting "pinning add tlcontrib \"*\""
+    }
+  }
+} ; # repos_commit
+
+proc dis_enable_reposave {} {
+  if [possible_repository [.tlr.new get]] {
+    .tlr.save state !disabled
+  } else {
+    .tlr.save state disabled
   }
 }
 
-proc repos_commit {} {
-  .topf.lrepos configure -text [print_repos]
-  set_repos_in_tlmgr
-  close_tlmgr
-  start_tlmgr
+proc save_load_repo {} {
+  repos_commit
+  end_dlg "" .tlr
   # reload remote package information
   set ::have_remote 0
   get_packages_info_remote
-  collect_filtered
-} ; # repos_commit
+  collect_and_display_filtered
+}
+
+proc select_mir {m} {
+  .tlr.new delete 0 end; .tlr.new insert end $m
+  .tlr.save state !disabled
+}
 
 # main repository dialog
-proc main_repository {} {
+proc repository_dialog {} {
 
-  # dialog toplevel with
+  # dialog with
   # - popup menu of mirrors (parse tlpkg/installer/ctan-mirrors.pl)
   # - text entry box
   # - directory browser button
@@ -1063,7 +1279,7 @@ proc main_repository {} {
   # wallpaper frame; see populate_main
   pack [ttk::frame .tlr.bg] -expand 1 -fill x
 
-  pack [ttk::frame .tlr.info] -in .tlr.bg -fill x
+  pack [ttk::frame .tlr.info] -in .tlr.bg -expand 1 -fill x
   grid columnconfigure .tlr.info 1 -weight 1
   set row -1
 
@@ -1073,142 +1289,74 @@ proc main_repository {} {
       -in .tlr.info -row $row -column 0 -sticky w
   pgrid [ttk::label .tlr.cur -text $::repos(main)] \
       -in .tlr.info -row 0 -column 1 -sticky w
-  # new repository
+  # proposed new repository
   incr row
   pgrid [ttk::label .tlr.lnew -text [__ "New"]] \
       -in .tlr.info -row $row -column 0 -sticky w
-  pgrid [ttk::entry .tlr.new -width 40] \
-      -in .tlr.info -row $row -column 1 -columnspan 2 -sticky w
+  pgrid [ttk::entry .tlr.new] \
+      -in .tlr.info -row $row -column 1 -columnspan 2 -sticky ew
+  .tlr.new insert 0 $::repos(main)
+  bind .tlr.new <KeyRelease> dis_enable_reposave
 
   ### three ways to specify a repository ###
   pack [ttk::frame .tlr.mirbuttons] -in .tlr.bg -fill x
-  # default remote repository
+  # 1. default remote repository
   ttk::button .tlr.ctan -text [__ "Any CTAN mirror"] -command {
     .tlr.new delete 0 end
     .tlr.new insert end $::any_mirror
+    .tlr.save state !disabled
   }
   ppack .tlr.ctan -in .tlr.mirbuttons -side left -fill x
-  # freshly create a cascading mirror dropdown menu
-  destroy .tlr.mir.m
-  if {[dict size $::mirrors] == 0} read_mirrors
-  do_debug "[dict size $::mirrors] mirrors"
-  if {[dict size $::mirrors] > 0} {
-    ttk::menubutton .tlr.mir -text [__ "Specific mirror..."] \
-        -direction below -menu .tlr.mir.m
-    ppack .tlr.mir -in .tlr.mirbuttons -side left -fill x
-    menu .tlr.mir.m
-    dict for {cont d_cont} $::mirrors {
-      set c_ed [mangle_name $cont]
-      menu .tlr.mir.m.$c_ed
-      .tlr.mir.m add cascade -label $cont -menu .tlr.mir.m.$c_ed
-      dict for {cntr urls} $d_cont {
-        set n_ed [mangle_name $cntr]
-        menu .tlr.mir.m.$c_ed.$n_ed
-        .tlr.mir.m.$c_ed add cascade -label $cntr -menu .tlr.mir.m.$c_ed.$n_ed
-        foreach u $urls {
-          .tlr.mir.m.$c_ed.$n_ed add command -label $u \
-              -command ".tlr.new delete 0 end; .tlr.new insert end $u"
-        }
-      }
-    }
-  }
-  # local repository
+  # 2. specific repository: create a cascading dropdown menu of mirrors
+  mirror_menu .tlr.mir select_mir
+  ppack .tlr.mir -in .tlr.mirbuttons -side left -fill x
+  # 3. local repository
   ttk::button .tlr.browse -text [__ "Local directory..."] -command {
     .tlr.new delete 0 end; .tlr.new insert end [pick_local_repo]}
   ppack .tlr.browse -in .tlr.mirbuttons -side left -fill x
 
-  # two ways to close the dialog
-  pack [ttk::frame .tlr.closebuttons] -pady [list 10 0] -in .tlr.bg -fill x
-  ttk::button .tlr.save -text [__ "Save and Load"] -command {
-    set ::repos(main) [.tlr.new get]
-    repos_commit
-    end_dlg "" .tlr
-  }
-  ppack .tlr.save -in .tlr.closebuttons -side right
-  ttk::button .tlr.abort -text [__ "Abort"] -command {end_dlg "" .tlr}
-  ppack .tlr.abort -in .tlr.closebuttons -side right
-
-  place_dlg .tlr .
-  wm resizable .tlr 0 0
-} ; # main_repository
-
-proc more_repos {} {
-
-  create_dlg .tladr .
-  wm title .tladr [__ "Additional repositories"]
-
-  # wallpaper frame; see populate_main
-  pack [ttk::frame .tladr.bg] -expand 1 -fill x
-
-  set ttl [__ "Additional repositories"]
-  ttk::label .tladr.title -text "$ttl (does nothing yet)" -font bigfont
-  pack .tladr.title -in .tladr.bg -padx 3 -pady 10
-
-  pack [ttk::frame .tladr.tlcf] -in .tladr.bg -anchor w -padx 3 -pady 10
-  ppack [ttk::button .tladr.tlc -text [__ "Add tlcontrib"]] \
-      -in .tladr.tlcf -side left
-  ttk::label .tladr.tlcl -text [__ "Packages which cannot be part of TeX Live"]
-  pack .tladr.tlcl -in .tladr.tlcf -side left
-
-  # treeview with repositories
-  ppack [ttk::frame .tladr.adrf] -in .tladr.bg -fill x -side top
-  ttk::treeview .tladr.reps -columns {url tag} -height 3 -show headings \
-      -selectmode browse -yscrollcommand {.tladr.vsb set}
-  .tladr.reps heading url -text "Url" -anchor w
-  .tladr.reps heading tag -text [__ "Tag (optional)"] -anchor w
-  .tladr.reps column url -width [expr {$::cw * 60}]
-  .tladr.reps column tag -width [expr {$::cw * 15}]
-  grid columnconfigure .tladr.adrf 0 -weight 1
-  ttk::scrollbar .tladr.vsb -orient vertical -command {.tladr.reps yview}
-  incr row
-  grid .tladr.vsb -in .tladr.adrf -row 0 -column 1 -sticky ns
-  grid .tladr.reps -in .tladr.adrf -row 0 -column 0 -sticky news
-  #pack .tladr.reps -in .tladr.adrf -side left -fill both -expand 1
+  ### add/remove tlcontrib ###
+  ttk::label .tlr.contribt -text [__ "tlcontrib additional repository"] \
+      -font bfont
+  pack .tlr.contribt -in .tlr.bg -anchor w -padx 3 -pady [list 10 3]
+  pack [ttk::label .tlr.contribl] -in .tlr.bg -anchor w -padx 3 -pady 3
+  ttk::checkbutton .tlr.contribb -variable ::toggle_contrib
+  pack .tlr.contribb -in .tlr.bg -anchor w -padx 3 -pady [list 3 10]
+  set ::toggle_contrib 0
+  set has_contrib 0
   foreach nm [array names ::repos] {
-    if {$nm ne "main"} {
-      if {$nm ne $::repos($nm)} {
-        .tladr.reps insert {} end -values [list $::repos($nm) $nm]
-      } else {
-        .tladr.reps insert {} end -values [list $::repos($nm) ""]
-      }
+    if {$::repos($nm) eq $::tlcontrib} {
+      set has_contrib 1
+      set contrib_tag $nm
+      break
     }
   }
-  pack [ttk::frame .tladr.add_del] -in .tladr.bg -fill x -expand 1
-  ppack [ttk::button .tladr.delb -text [__ "Delete"]] \
-      -in .tladr.add_del -side left -fill x
-  ppack [ttk::button .tladr.addb -text [__ "Add"]] \
-      -in .tladr.add_del -side right -fill x
+  if $has_contrib {
+    .tlr.contribl configure -text [__ "tlcontrib repository is included"]
+    .tlr.contribb configure -text [__ "Remove tlcontrib repository"]
+  } else {
+    .tlr.contribl configure -text [__ "tlcontrib repository is not included"]
+    .tlr.contribb configure -text [__ "Add tlcontrib repository"]
+  }
 
-  # pinning
+  # two ways to close the dialog
+  pack [ttk::frame .tlr.closebuttons] -pady [list 10 0] -in .tlr.bg -fill x
+  ttk::button .tlr.save -text [__ "Save and Load"] -command save_load_repo
+  ppack .tlr.save -in .tlr.closebuttons -side right
+  dis_enable_reposave
+  ttk::button .tlr.cancel -text [__ "Cancel"] -command {end_dlg "" .tlr}
+  ppack .tlr.cancel -in .tlr.closebuttons -side right
+  bind .tlr <Escape> {.tlr.cancel invoke}
 
-  ppack [ttk::frame .tladr.pinf] -in .tladr.bg -fill x -expand 1
-  ttk::label .tladr.pinl -text "Pinning" -font bfont
-  ttk::scrollbar .tladr.pinvbs -orient vertical -command {.tladr.pintx yview}
-  ttk::scrollbar .tladr.pinhbs -orient horizontal -command {.tladr.pintx xview}
-  text .tladr.pintx -height 3 -wrap none \
-      -yscrollcommand {.tladr.pinvbs set} -xscrollcommand {.tladr.pinhbs set}
-  grid columnconfigure .tladr.pinf 0 -weight 1
-  grid .tladr.pinl -in .tladr.pinf -row 0 -column 0 -sticky w
-  grid .tladr.pinhbs -in .tladr.pinf -row 2 -column 0 -sticky ew
-  grid .tladr.pinvbs -in .tladr.pinf -row 1 -column 1 -sticky ns
-  grid .tladr.pintx -in .tladr.pinf -row 1 -column 0 -sticky news
-
-  pack [ttk::frame .tladr.cancelok] \
-      -in .tladr.bg -fill x -pady [list 10 0] -side bottom
-  ppack [ttk::button .tladr.ok -text [__ "Ok"]] -in .tladr.cancelok -side right
-  ppack [ttk::button .tladr.cancel -text [__ "Cancel"]] \
-      -in .tladr.cancelok -side right
-  .tladr.ok configure -command {end_dlg "" .tladr}
-  .tladr.cancel configure -command {end_dlg "" .tladr}
-
-  place_dlg .tladr
-}
+  wm protocol .tlr WM_DELETE_WINDOW \
+      {cancel_or_destroy .tlr.cancel .tlr}
+  wm resizable .tlr 1 0
+  place_dlg .tlr .
+} ; # repository_dialog
 
 ### platforms
 
 if {$::tcl_platform(platform) ne "windows"} {
-
-  # the ::platforms dict has been created earlier
 
   proc toggle_pl_marked {pl cl} {
     # toggle_pl_marked is triggered by a mouse click only in column #1.
@@ -1230,10 +1378,10 @@ if {$::tcl_platform(platform) ne "windows"} {
     } else {
       .tlpl.pl set $pl "sup" "[mark_sym $m0] \u21d2 [mark_sym $m1]"
     }
-    .tlpl.do configure -state disabled
+    .tlpl.do state disabled
     dict for {p mrks} $::platforms {
       if {[dict get $mrks "fut"] ne [dict get $mrks "cur"]} {
-        .tlpl.do configure -state !disabled
+        .tlpl.do state !disabled
         break
       }
     }
@@ -1266,25 +1414,12 @@ if {$::tcl_platform(platform) ne "windows"} {
     run_cmds $cmds 1
     vwait ::done_waiting
     update_local_revnumbers
-    collect_filtered
+    collect_and_display_filtered
 
   } ; # platforms_do
 
   # the platforms dialog
   proc platforms_select {} {
-    run_cmd_waiting "platform list"
-    set ::platforms {}
-    foreach l $::out_log {
-      if [regexp {^\s+(\S+)$} $l m p] {
-        dict set ::platforms $p {}
-        dict set ::platforms $p "cur" 0
-        dict set ::platforms $p "fut" 0
-      } elseif [regexp {^\(i\)\s+(\S+)$} $l m p] {
-        dict set ::platforms $p {}
-        dict set ::platforms $p "cur" 1
-        dict set ::platforms $p "fut" 1
-      }
-    }
     create_dlg .tlpl
     wm title .tlpl [__ "Platforms"]
     if $::plain_unix {wm attributes .tlpl -type dialog}
@@ -1292,14 +1427,28 @@ if {$::tcl_platform(platform) ne "windows"} {
     # wallpaper frame
     pack [ttk::frame .tlpl.bg] -expand 1 -fill both
 
+    # buttons
+    pack [ttk::frame .tlpl.but] -in .tlpl.bg -side bottom -fill x
+    ttk::button .tlpl.do -text [__ "Apply and close"] -command {
+      disable_dlg .tlpl
+      platforms_commit
+      end_dlg "" .tlpl
+    }
+    ttk::button .tlpl.dont -text [__ "Close"] -command \
+        {end_dlg "" .tlpl}
+    ppack .tlpl.do -in .tlpl.but -side right
+    #.tlpl.do state disabled
+    ppack .tlpl.dont -in .tlpl.but -side right
+    bind .tlpl <Escape> {.tlpl.dont invoke}
+
     # platforms treeview; do we need a scrollbar?
     pack [ttk::frame .tlpl.fpl] -in .tlpl.bg -fill both -expand 1
     ttk::treeview .tlpl.pl -columns {sup plat} -show headings \
-        -height [dict size $::platforms] ; # -yscrollcommand {.tlpl.plsb set}
+        -height [dict size $::platforms] -yscrollcommand {.tlpl.plsb set}
     ppack .tlpl.pl -in .tlpl.fpl -side left -fill both -expand 1
-    #ttk::scrollbar .tlpl.plsb -orient vertical \
-    #    -command {.tlpl.pl yview}
-    #ppack .tlpl.plsb -in .tlpl.fpl -side right -fill y -expand 1
+    ttk::scrollbar .tlpl.plsb -orient vertical \
+        -command {.tlpl.pl yview}
+    ppack .tlpl.plsb -in .tlpl.fpl -side right -fill y -expand 1
     #.tlpl.pl heading sup -text ""
     .tlpl.pl column sup -width [expr {$::cw * 8}]
     .tlpl.pl heading plat -text [__ "platform"] -anchor w
@@ -1318,19 +1467,8 @@ if {$::tcl_platform(platform) ne "windows"} {
              [.tlpl.pl identify item %x %y] \
              [.tlpl.pl identify column %x %y]}
 
-    # buttons
-    pack [ttk::frame .tlpl.but] -in .tlpl.bg -fill x
-    ttk::button .tlpl.do -text [__ "Apply and close"] -command {
-      platforms_commit; end_dlg "" .tlpl
-    }
-    ttk::button .tlpl.dont -text [__ "Close"] -command \
-        {end_dlg "" .tlpl}
-    ppack .tlpl.do -in .tlpl.but -side right
-    .tlpl.do configure -state disabled
-    ppack .tlpl.dont -in .tlpl.but -side right
-
+    wm resizable .tlpl 0 1
     place_dlg .tlpl .
-    wm resizable .tlpl 0 0
   } ; # platforms_select
 
 } ; # $::tcl_platform(platform) ne "windows"
@@ -1339,6 +1477,7 @@ if {$::tcl_platform(platform) ne "windows"} {
 
 # This is currently rather dangerous.
 # ::do_restore is set to 0 or 1 near the top of this source.
+# This code, currently disbled, has not been tested in a while.
 
 if $::do_restore {
 # dictionary of backups, with mapping to list of available revisions
@@ -1347,17 +1486,17 @@ set bks {}
 proc enable_restore {y_n} {
   set st [expr {$y_n ? !disabled : disabled}]
   .tlbk.bklist state $st
-  .tlbk.all configure -state $st
-  .tlbk.done configure -state $st
+  .tlbk.all state $st
+  .tlbk.done state $st
 } ; # enable_restore
 
 proc finish_restore {} {
   vwait ::done_waiting
   # now log_widget_finish should have run and re-enabled its close button.
-  # We won't wait for the log toplevel to close, but we will
+  # We won't wait for the log dialog to close, but we will
   # update the packages display in the main window.
   update_local_revnumbers
-  collect_filtered
+  collect_and_display_filtered
 } ; # finish_restore
 
 proc restore_all {} {
@@ -1419,7 +1558,7 @@ proc restore_backups_dialog {} {
   }
   set pwd0 [pwd]
   cd $bdir
-  set backups [lsort [glob *.tar.xz]]
+  set backups [lsort [glob -nocomplain *.tar.xz]]
   if {[llength $backups] == 0} {
     tk_messageBox -message [__ "No backups found in $bdir"]
     return
@@ -1521,30 +1660,60 @@ proc restore_backups_dialog {} {
 
 ##### package-related #####
 
+### updating
+
+proc update_tlmgr_w32 {} {
+  close_tlmgr
+  # don't try pipes or capturing, because of
+  # tlmgr's acrobatics with nested command prompts
+  wm iconify .
+  exec -ignorestderr cmd /k "start cmd /k tlmgr update --self"
+  exec $::progname &
+  destroy .
+}
+
 proc update_tlmgr {} {
   if {! $::need_update_tlmgr} {
     tk_messageBox -message [__ "Nothing to do!"]
+    return
+  }
+  if {$::tcl_platform(platform) eq "windows"} {
+    update_tlmgr_w32
     return
   }
   run_cmd "update --self" 1
   vwait ::done_waiting
   # tlmgr restarts itself automatically
   update_local_revnumbers
-  collect_filtered
+  .topfr.linfra configure -text \
+      "tlmgr: r[dict get $::pkgs texlive.infra localrev]"
+  collect_and_display_filtered
 } ; # update_tlmgr
 
 proc update_all {} {
+  set updated_tlmgr 0
   if $::need_update_tlmgr {
-    tk_messageBox -message [__ "Update self first!"]
-    return
-  } elseif {! $::n_updates} {
+    if {$::tcl_platform(platform) eq "windows"} {
+      return ; # just to be sure; 'update all' button should be disabled
+    }
+    run_cmd "update --self" 1
+    vwait ::done_waiting
+    # tlmgr restarts itself automatically
+    update_local_revnumbers
+    set updated_tlmgr 1
+  }
+  # tlmgr restarts itself automatically
+  #  tk_messageBox -message [__ "Update self first!"]
+  #  return
+  if {! $::n_updates && !$updated_tlmgr} {
     tk_messageBox -message [__ "Nothing to do!"]
     return
+  } elseif $::n_updates {
+    run_cmd "update --all" 1
+    vwait ::done_waiting
+    update_local_revnumbers
   }
-  run_cmd "update --all" 1
-  vwait ::done_waiting
-  update_local_revnumbers
-  collect_filtered
+  collect_and_display_filtered
 } ; # update_all
 
 ### doing something with some packages
@@ -1590,8 +1759,10 @@ proc install_pkgs {sel_opt {pk ""}} {
     }
   }
   if {[llength $deps] > 0} {
-    set ans [any_message \
-        [__ "Also installing dependencies\n\n$deps.\n\nContinue?"] "okcancel"]
+    set ans \
+        [any_message \
+             [__ "Also installing dependencies\n\n%s" $deps] \
+             "okcancel"]
     if {$ans eq "cancel"} return
   }
   run_cmd "install $todo" 1
@@ -1601,7 +1772,8 @@ proc install_pkgs {sel_opt {pk ""}} {
     show_err_log
   }
   update_local_revnumbers
-  collect_filtered
+  if {$sel_opt eq "marked"} {mark_all 0}
+  collect_and_display_filtered
 } ; # install_pkgs
 
 proc update_pkgs {sel_opt {pk ""}} {
@@ -1641,7 +1813,7 @@ proc update_pkgs {sel_opt {pk ""}} {
        "yesnocancel"]
     switch $ans {
       "cancel" return
-      "yes" {run_cmd "update $todo"} 1
+      "yes" {run_cmd "update $todo" 1}
       "no" {
         set deps {}
         run_cmd_waiting "update --dry-run --no-depends $todo"
@@ -1652,7 +1824,7 @@ proc update_pkgs {sel_opt {pk ""}} {
         }
         if {[llength $deps] > 0} {
           set ans [any_message \
-              [__ "Updating hard dependencies %s anyway. Continue?" $deps] \
+              [__ "Updating some dependencies %s anyway. Continue?" $deps] \
                        "okcancel"]
           if {$ans eq "cancel"} return
         }
@@ -1673,7 +1845,8 @@ proc update_pkgs {sel_opt {pk ""}} {
     show_err_log
   }
   update_local_revnumbers
-  collect_filtered
+  if {$sel_opt eq "marked"} {mark_all 0}
+  collect_and_display_filtered
 } ; # update_pkgs
 
 proc remove_pkgs {sel_opt {pk ""}} {
@@ -1717,7 +1890,7 @@ proc remove_pkgs {sel_opt {pk ""}} {
         }
         if {[llength $deps] > 0} {
           set ans [any_message \
-              [__ "Removing hard dependencies %s anyway. Continue?" $deps] \
+              [__ "Removing some dependencies %s anyway. Continue?" $deps] \
                        "okcancel"]
           if {$ans eq "cancel"} return
         }
@@ -1733,23 +1906,14 @@ proc remove_pkgs {sel_opt {pk ""}} {
     show_err_log
   }
   update_local_revnumbers
-  collect_filtered
+  if {$sel_opt eq "marked"} {mark_all 0}
+  collect_and_display_filtered
 } ; # remove_pkgs
 
 # restoring packages is a rather different story, controlled by the
 # contents of the backup directory. see further up.
 
 ##### varous callbacks #####
-
-proc run_entry {} {
-  # TODO: some validation of $cmd
-  do_debug "run_entry"
-  set cmd [.ent.e get]
-  if {$cmd eq ""} return
-  do_debug $cmd
-  .ent.e delete 0 end
-  run_cmd $cmd 1
-}
 
 proc restart_self {} {
   do_debug "trying to restart"
@@ -1792,14 +1956,6 @@ proc mark_all {mrk} {
   # alternatively: regenerate ::filtered and .pkglist from ::pkgs
 } ; # mark_all
 
-proc toggle_search_desc {} {
-  # when this proc is called, ::search_desc is not yet toggled
-  # so we temporarily pre-toggle and post-untoggle it
-  set ::search_desc [expr {$::search_desc ? 0 : 1}]
-  display_packages_info
-  set ::search_desc [expr {$::search_desc ? 0 : 1}]
-}
-
 ##### package popup #####
 
 proc do_package_popup_menu {x y X Y} {
@@ -1837,12 +1993,39 @@ proc set_paper {p} {
   run_cmd "paper paper $p" 1
 }
 
+#### gui options ####
+
+proc set_language {l} {
+  set ::lang $l
+  load_translations
+  rebuild_interface
+  if {! [save_config_var "gui-lang" $::lang]} {
+    tk_messageBox -message [__"Cannot save language setting"]
+  }
+}
+
+proc set_fontscale {s} {
+  set ::tkfontscale $s
+  redo_fonts
+  rebuild_interface
+  if {[dict get $::pkgs texlive.infra localrev] >= 54766} {
+    if {! [save_config_var "tkfontscale" $::tkfontscale]} {
+      tk_messageBox -message [__"Cannot save font scale setting"]
+    }
+  }
+}
+
+proc zoom {n} {
+  if {$n <= 0} {set n 1}
+  set_fontscale [expr {$n*$::tkfontscale}]
+}
+
 ##### running external commands #####
 
 # For capturing an external command, we need a separate output channel,
 # but we reuse ::out_log.
 # stderr is bundled with stdout so ::err_log should stay empty.
-proc read_capt {} {
+proc read_capture {} {
   set l "" ; # will contain the line to be read
   if {([catch {chan gets $::capt l} len] || [chan eof $::capt])} {
     catch {chan close $::capt}
@@ -1852,31 +2035,74 @@ proc read_capt {} {
     lappend ::out_log $l
     log_widget_add $l
   }
-}; # read_capt
+}; # read_capture
 
 proc run_external {cmd mess} {
   set ::out_log {}
   set ::err_log {}
   lappend ::out_log $mess
   unset -nocomplain ::done_waiting
-  # dont understand why, on windows, start_tlmgr does not trigger
-  # a console window but this proc does
-  if [catch {open "|$cmd 2>&1" "r"} ::capt] {
+  # treat cmd as a list, possibly of one element
+  # using a list enables a direct invocation, bypassing a shell
+  set cmd0 [lindex $cmd 0]
+  set cmd [lreplace $cmd 0 0 "|$cmd0"]
+  set cmd [list {*}$cmd 2>@1]
+  if [catch {open $cmd r} ::capt] {
     tk_messageBox -message "Failure to launch $cmd"
   }
   chan configure $::capt -buffering line -blocking 0
-  chan event $::capt readable read_capt
+  chan event $::capt readable read_capture
   log_widget_init
 }
 
+proc about_cmd {} {
+  set msg "\u00a9 2017-2020 Siep Kroonenberg\n\n"
+  append msg [__ "GUI interface for TeX Live Manager\nImplemented in Tcl/Tk"]
+  tk_messageBox -message $msg
+}
+
+proc show_help {} {
+  set ::env(NOPERLDOC) 1
+  long_message [exec tlmgr --help] ok
+}
+
+## arbitrary commands: no way to know what data have to be updated
+#proc custom_command {} {
+#  create_dlg .tlcust .
+#  wm title .tlcust [__ "Custom command"]
+#  pack [ttk::frame .tlcust.bg] -expand 1 -fill x
+#
+#  ppack [ttk::entry .tlcust.e] \
+#      -in .tlcust.bg -side left -fill x -expand 1
+#  ppack [ttk::button .tlcust.b -text [__ "Go"] -command run_entry] \
+#      -in .tlcust.bg -side left
+#  bind .tlcust.e <Return> run_entry
+#  bind .tlcust <Escape> {end_dlg "" .tlcust}
+#  wm .tlcust resizable 1 0
+#  place_dlg .tlcust .
+#}
+
 ##### main window #####
+
+proc try_loading_remote {} {
+  if {[possible_repository $::repos(main)]} {
+    get_packages_info_remote
+    collect_and_display_filtered
+  } else {
+    set mes [__ "%s is not a local or remote repository.
+Please configure a valid repository" $::repos(main)]
+    append mes "\n([__ "Options"] \/ [__ "Repositories"] ...)"
+    tk_messageBox -message $mes -title [__ "Error"] -type ok -icon error
+  }
+}
 
 proc populate_main {} {
 
-  wm title . "$::progname $::procid"
+  wm withdraw .
 
-  # width of '0', as a rough estimate of average character width
-  set ::cw [font measure TkTextFont "0"]
+  wm title . "TeX Live Shell"
+
+  ## menu ##
 
   # dummy empty menu to replace the real menu .mn in disabled states.
   # the "File" cascade should ensure that the dummy menu
@@ -1895,79 +2121,107 @@ proc populate_main {} {
     .mn configure -borderwidth 1
     .mn configure -background $::default_bg
 
-    # plain_unix: avoid a RenderBadPicture error on quitting.
-    # 'send' changes the shutdown sequence,
-    # which avoids triggering the bug.
-    # 'tk appname <something>' restores 'send' and avoids the bug
+    # plain_unix: avoid a possible RenderBadPicture error on quitting
+    # when there is a menu.
+    # 'send' bypasses the bug by changing the shutdown sequence.
+    # 'tk appname <something>' restores 'send'.
     bind . <Destroy> {
       catch {tk appname appname}
     }
   }
 
+  # inx: keeping count to record indices where needed,
+  # i.e. when an entry needs to be referenced.
+  # not all submenus need this.
+
   .mn add cascade -label [__ "File"] -menu .mn.file -underline 0
   menu .mn.file
-  .mn.file add command -label [__ "Load default repository"] \
-      -command {get_packages_info_remote; collect_filtered}
+  .mn.file add command -label [__ "Load repository"] \
+      -command try_loading_remote
   .mn.file add command -command {destroy .} -label [__ "Exit"] -underline 1
-
-  # inx: keeping count to record indices where needed,
-  # i.e. when an entry needs to be referenced
-  .mn add cascade -label [__ "Packages"] -menu .mn.pkg
-  menu .mn.pkg
-  set inx 0
-  set ::inx_upd_tlmgr $inx
-  .mn.pkg add command -label [__ "Update tlmgr"] -command update_tlmgr
-  incr inx
-  set ::inx_upd_all $inx
-  .mn.pkg add command -label [__ "Update all"] -command update_all
-  incr inx
-  .mn.pkg add command -label [__ "Install marked"] \
-      -command {install_pkgs "marked"}
-  incr inx
-  .mn.pkg add command -label [__ "Update marked"] \
-      -command {update_pkgs "marked"}
-  incr inx
-  .mn.pkg add command -label [__ "Remove marked"] \
-      -command {remove_pkgs "marked"}
-  if $::do_restore {
-    incr inx
-    .mn.pkg add command -label [__ "Restore from backup..."] \
-        -command restore_backups_dialog
-  }
 
   .mn add cascade -label [__ "Actions"] -menu .mn.act -underline 0
   menu .mn.act
+  set inx -1
+  incr inx
   .mn.act add command -label [__ "Regenerate filename database"] -command \
       {run_external "mktexlsr" [__ "Regenerating filename database..."]}
   .mn.act add command -label [__ "Regenerate formats"] -command \
       {run_external "fmtutil-sys --all" [__ "Rebuilding formats..."]}
   .mn.act add command -label [__ "Regenerate fontmaps"] -command \
       {run_external "updmap-sys" [__ "Rebuilding fontmap files..."]}
+  #.mn.act add command -label [__ "Custom command"] -command custom_command
 
   .mn add cascade -label [__ "Options"] -menu .mn.opt -underline 0
+
   menu .mn.opt
-  set inx 0
-  .mn.opt add command -label [__ "Change main repository"] \
-      -command main_repository
+  set inx -1
   incr inx
-  .mn.opt add command -label [__ "Additional repositories"] \
-      -command more_repos
+  .mn.opt add command -label "[__ "Repositories"] ..." \
+      -command repository_dialog
+
   incr inx
-  .mn.opt add cascade -label [__ "Paper"] -menu .mn.opt.paper
+  .mn.opt add cascade -label [__ "Paper ..."] -menu .mn.opt.paper
+  incr inx
   menu .mn.opt.paper
-  foreach p [list a4 letter] {
-    .mn.opt.paper add command -label $p -command "set_paper $p"
+  foreach p [list A4 letter] {
+    .mn.opt.paper add command -label $p -command \
+        "set_paper [string tolower $p]"
   }
+
+  if {[llength $::langs] > 1} {
+    incr inx
+    .mn.opt add cascade -label [__ "GUI language"] \
+        -menu .mn.opt.lang
+    menu .mn.opt.lang
+    foreach l [lsort $::langs] {
+      if {$l eq $::lang} {
+        set mlabel "$l *"
+      } else {
+        set mlabel $l
+      }
+      .mn.opt.lang add command -label $mlabel \
+          -command "set_language $l"
+    }
+  }
+
+  incr inx
+  .mn.opt add cascade -label [__ "GUI font scaling"] \
+      -menu .mn.opt.fscale
+  menu .mn.opt.fscale
+  .mn.opt.fscale add command -label \
+      "[__ "Current"]:  [format {%.2f} $::tkfontscale]"
+  foreach s {0.6 0.8 1 1.2 1.6 2 2.5 3 3.8 5 6 7.5 9} {
+    .mn.opt.fscale add command -label $s -command "set_fontscale $s"
+  }
+
+  # browser-style keyboard shortcuts for scaling
+  bind . <Control-KeyRelease-minus> {zoom 0.8}
+  bind . <Control-KeyRelease-equal> {zoom 1.25}
+  bind . <Control-Shift-KeyRelease-equal> {zoom 1.25}
+  bind . <Control-KeyRelease-plus> {zoom 1.25}
+  bind . <Control-KeyRelease-0> {set_fontscale 1}
+  if {$::tcl_platform(os) eq "Darwin"} {
+    bind . <Command-KeyRelease-minus> {zoom 0.8}
+    bind . <Command-KeyRelease-equal> {zoom 1.25}
+    bind . <Command-Shift-KeyRelease-equal> {zoom 1.25}
+    bind . <Command-KeyRelease-plus> {zoom 1.25}
+    bind . <Command-KeyRelease-0> {set_fontscale 1}
+  }
+
+
   if {$::tcl_platform(platform) ne "windows"} {
     incr inx
     set ::inx_platforms $inx
-    .mn.opt add command -label [__ "Platforms"] -command platforms_select
+    .mn.opt add command -label "[__ "Platforms"] ..." -command platforms_select
   }
 
   .mn add cascade -label [__ "Help"] -menu .mn.help -underline 0
   menu .mn.help
-  .mn.help add command -command {tk_messageBox -message "Helpless"} \
-      -label "About"
+  .mn.help add command -label [__ "About"] -command about_cmd
+  .mn.help add command -label [__ "tlmgr help"] -command show_help
+
+  ## menu end
 
   # wallpaper frame
   # it is possible to set a background color for a toplevel, but on
@@ -1976,124 +2230,7 @@ proc populate_main {} {
   # with the default ttk::frame color, which seems to work
   # everywhere.
   pack [ttk::frame .bg] -expand 1 -fill both
-
-  # various info
-  ttk::frame .topf
-  pack .topf -in .bg -side top -anchor w
-
-  pgrid [ttk::label .topf.llrepo -text [__ "Default repositories"] -anchor w] \
-      -row 0 -column 0 -sticky nw
-  pgrid [ttk::label .topf.lrepos -text ""] \
-      -row 0 -column 1 -sticky nw
-  pgrid [ttk::label .topf.loaded -text [__ "Not loaded"]] \
-      -row 1 -column 1 -sticky w
-
-  ttk::label .topf.lluptodate -text [__ "TL Manager up to date?"] -anchor w
-  pgrid .topf.lluptodate -row 2 -column 0 -sticky w
-  ttk::label .topf.luptodate -text [__ "Unknown"] -anchor w
-  pgrid .topf.luptodate -row 2 -column 1 -sticky w
-
-  pgrid [ttk::label .topf.llcmd -anchor w -text [__ "Last tlmgr command:"]] \
-      -row 3 -column 0 -sticky w
-  pgrid [ttk::label .topf.lcmd -anchor w -textvariable ::last_cmd] \
-      -row 3 -column 1 -sticky w
-
-  # command entry widget
-  ttk::frame .ent
-         ppack [ttk::label .ent.l -text [__ "Type command:"]] -side left
-  ppack [ttk::entry .ent.e -width 40] -side left -padx 3
-         ppack [ttk::button .ent.b -text [__ "Go"] -command run_entry] \
-             -side left
-  bind .ent.e <Return> run_entry
-  pack .ent -pady 10 -in .bg -fill x -side top
-
-  # package list
-  ttk::label .lpack -text [__ "Package list"] -font TkHeadingFont -anchor w
-  ppack .lpack -in .bg -side top -fill x
-
-  # controlling package list
-  ttk::frame .pkfilter
-  # filter on status: inst, all, upd
-  ttk::label .pkfilter.lstat -font TkHeadingFont -text [__ "Status"]
-  ttk::radiobutton .pkfilter.inst -text [__ "Installed"] -value inst \
-      -variable ::stat_opt -command collect_filtered
-  ttk::radiobutton .pkfilter.alls -text [__ "All"] -value all \
-      -variable ::stat_opt -command collect_filtered
-  ttk::radiobutton .pkfilter.upd -text [__ "Updatable"] -value upd \
-      -variable ::stat_opt -command collect_filtered
-  grid .pkfilter.lstat -column 0 -row 0 -sticky w -padx {3 50}
-  pgrid .pkfilter.inst -column 0 -row 1 -sticky w
-  pgrid .pkfilter.alls -column 0 -row 2 -sticky w
-  pgrid .pkfilter.upd -column 0 -row 3 -sticky w
-
-  # filter on detail level: all, coll, schm
-  ttk::label .pkfilter.ldtl -font TkHeadingFont -text [__ "Detail >> Global"]
-  ttk::radiobutton .pkfilter.alld -text [__ All] -value all \
-      -variable ::dtl_opt -command collect_filtered
-  ttk::radiobutton .pkfilter.coll -text [__ "Collections and schemes"] \
-      -value coll -variable ::dtl_opt -command collect_filtered
-  ttk::radiobutton .pkfilter.schm -text [__ "Only schemes"] -value schm \
-      -variable ::dtl_opt -command collect_filtered
-  pgrid .pkfilter.ldtl -column 1 -row 0 -sticky w
-  pgrid .pkfilter.alld -column 1 -row 1 -sticky w
-  pgrid .pkfilter.coll -column 1 -row 2 -sticky w
-  pgrid .pkfilter.schm -column 1 -row 3 -sticky w
-
-  # marks
-  grid [ttk::button .mrk_all -text [__ "Mark all"] -command {mark_all 1}] \
-      -in .pkfilter -column 2 -row 1 -sticky w -padx {50 3} -pady 3
-  grid [ttk::button .mrk_none -text [__ "Mark none"] -command {mark_all 0}] \
-      -in .pkfilter -column 2 -row 2 -sticky w -padx {50 3} -pady 3
-
-  pack .pkfilter -in .bg -side top -fill x
-
-  # search interface
-  pack [ttk::frame .pksearch] -in .bg -side top -fill x
-  ppack [ttk::label .pksearch.l \
-             -text [__ "Search package names"]] -side left
-  pack [ttk::entry .pksearch.e -width 30] -side left -padx {3 0} -pady 3
-  ppack [ttk::checkbutton .pksearch.d -variable ::search_desc \
-             -text [__ "Also search short descriptions"]] -side left
-  bind .pksearch.e <KeyRelease> display_packages_info
-  bind .pksearch.d <ButtonRelease> toggle_search_desc
-
-  # packages list
-  pack [ttk::frame .fpkg] -in .bg -side top -fill both -expand 1
-  ttk::treeview .pkglist -columns \
-      {mk name localrev remoterev shortdesc} \
-      -show headings -height 8 -selectmode extended \
-      -xscrollcommand {.pkhsb set} -yscrollcommand {.pkvsb set}
-  .pkglist heading mk -text "" -anchor w
-  .pkglist heading name -text [__ "Name"] -anchor w
-  .pkglist heading localrev -text [__ "Local Rev. (ver.)"] -anchor w
-  .pkglist heading remoterev -text [__ "Remote Rev. (ver.)"] -anchor w
-  .pkglist heading shortdesc -text [__ "Description"] -anchor w
-  .pkglist column mk -width [expr {$::cw * 3}]
-  .pkglist column name -width [expr {$::cw * 25}]
-  .pkglist column localrev -width [expr {$::cw * 18}]
-  .pkglist column remoterev -width [expr {$::cw * 18}]
-  .pkglist column shortdesc -width [expr {$::cw * 50}]
-
-  ttk::scrollbar .pkhsb -orient horizontal -command {.pkglist xview}
-  ttk::scrollbar .pkvsb -orient vertical -command {.pkglist yview}
-  pgrid .pkglist -in .fpkg -row 0 -column 0 -sticky news
-  grid .pkvsb -in .fpkg -row 0 -column 1 -sticky ns
-  grid .pkhsb -in .fpkg -row 1 -column 0 -sticky ew
-  grid columnconfigure .fpkg 0 -weight 1
-  grid rowconfigure .fpkg 0 -weight 1
-
-  # "#1" refers to the first column (with mark symbols)
-  bind .pkglist <space> {toggle_marked_pkg [.pkglist focus] "#1"}
-  bind .pkglist <Return> {toggle_marked_pkg [.pkglist focus] "#1"}
-  # only toggle when column is "mk" i.e. #1
-  bind .pkglist <ButtonRelease-1> {toggle_marked_pkg [
-      .pkglist identify item %x %y] [.pkglist identify column %x %y]}
-
-  menu .pkg_popup ; # entries added on-the-fly
-  bind .pkglist <<RightClick>> {do_package_popup_menu %x %y %X %Y}
-  if $::plain_unix {
-    bind .pkg_popup <Leave> {.pkg_popup unpost}
-  }
+  .bg configure -padding 5
 
   # bottom of main window
   pack [ttk::frame .endbuttons] -in .bg -side bottom -fill x
@@ -2108,29 +2245,211 @@ proc populate_main {} {
       -in .endbuttons -side right
   ttk::button .showlogs -text [__ "Show logs"] -command show_logs
   ppack .showlogs -in .endbuttons -side right
-} ; # populate_main
+
+  # top of main window
+  ppack [ttk::frame .topf] -in .bg -side top -anchor w -fill x
+
+  if $::ddebug {
+    ppack [ttk::label .topf.test -text [info nameofexecutable]]
+    ppack [ttk::label .topf.test2 -text $::progname]
+    ppack [ttk::label .topf.test3 -text \
+           [string range $::env(PATH) 0 59]]
+  }
+
+  # left frame
+  pack [ttk::frame .topfl] -in .topf -side left -anchor nw
+
+  # subframe for repositories, to be filled by show_repos
+  pack [ttk::frame .toprepo] -in .topfl -side top -anchor w
+
+  # various info, left frame
+  pack [ttk::frame .topfll] -in .topfl -side top -anchor nw -pady [list 6 0]
+  ttk::label .topfll.lluptodate -text [__ "TL Manager up to date?"] -anchor w
+  pgrid .topfll.lluptodate -row 2 -column 0 -sticky w
+  ttk::label .topfll.luptodate -text [__ "Unknown"] -anchor w
+  pgrid .topfll.luptodate -row 2 -column 1 -sticky w
+
+  ttk::label .topfll.llcmd -text [__ "Last tlmgr command:"] -anchor w \
+
+  pgrid .topfll.llcmd -row 3 -column 0 -sticky w
+  ttk::label .topfll.lcmd -textvariable ::last_cmd \
+      -wraplength [expr {60*$::cw}] -justify left -anchor w
+  pgrid .topfll.lcmd -row 3 -column 1 -sticky w
+
+  # various info, right frame
+  ppack [ttk::frame .topfr] -in .topf -side right -anchor ne
+  if {$::tcl_platform(platform) eq "windows"} {
+    pack [ttk::label .topfr.ladmin] -side top -anchor e
+  }
+  pack [ttk::label .topfr.lroot] -side top -anchor e
+  .topfr.lroot configure -text [__ "Root at %s" $::instroot]
+  pack [ttk::label .topfr.linfra] -side top -anchor e
+  pack [ttk::label .topfr.lshell] -side top -anchor e
+
+  pack [ttk::separator .sp -orient horizontal] \
+      -in .bg -side top -fill x -pady 6
+
+  # package list
+  ttk::label .lpack -text [__ "Package list"] -font TkHeadingFont -anchor w
+  pack .lpack -in .bg -side top -padx 3 -pady [list 15 3] -fill x
+
+  # controlling package list
+  ttk::frame .pkfilter
+  pack .pkfilter -in .bg -side top -fill x
+  grid columnconfigure .pkfilter 3 -weight 1
+  # column #3 is empty, but that is allright
+  # filter on status: inst, all, upd
+  ttk::label .pkfilter.lstat -font TkHeadingFont -text [__ "Status"]
+  ttk::radiobutton .pkfilter.inst -text [__ "Installed"] -value inst \
+      -variable ::stat_opt -command collect_and_display_filtered
+  ttk::radiobutton .pkfilter.alls -text [__ "All"] -value all \
+      -variable ::stat_opt -command {
+        if {! $::have_remote} get_packages_info_remote
+        collect_and_display_filtered
+      }
+  ttk::radiobutton .pkfilter.upd -text [__ "Updatable"] -value upd \
+      -variable ::stat_opt -command {
+        if {! $::have_remote} get_packages_info_remote
+        collect_and_display_filtered
+      }
+  grid .pkfilter.lstat -column 0 -row 0 -sticky w -padx {3 50}
+  pgrid .pkfilter.inst -column 0 -row 1 -sticky w
+  pgrid .pkfilter.alls -column 0 -row 2 -sticky w
+  pgrid .pkfilter.upd -column 0 -row 3 -sticky w
+
+  # filter on detail level: all, coll, schm
+  ttk::label .pkfilter.ldtl -font TkHeadingFont -text [__ "Detail >> Global"]
+  ttk::radiobutton .pkfilter.alld -text [__ All] -value all \
+      -variable ::dtl_opt -command collect_and_display_filtered
+  ttk::radiobutton .pkfilter.coll -text [__ "Collections and schemes"] \
+      -value coll -variable ::dtl_opt -command collect_and_display_filtered
+  ttk::radiobutton .pkfilter.schm -text [__ "Only schemes"] -value schm \
+      -variable ::dtl_opt -command collect_and_display_filtered
+  pgrid .pkfilter.ldtl -column 1 -row 0 -sticky w
+  pgrid .pkfilter.alld -column 1 -row 1 -sticky w
+  pgrid .pkfilter.coll -column 1 -row 2 -sticky w
+  pgrid .pkfilter.schm -column 1 -row 3 -sticky w
+
+  # marks
+  grid [ttk::button .mrk_all -text [__ "Mark all"] -command {mark_all 1}] \
+      -in .pkfilter -column 2 -row 1 -sticky w -padx {50 3} -pady 3
+  grid [ttk::button .mrk_none -text [__ "Mark none"] -command {mark_all 0}] \
+      -in .pkfilter -column 2 -row 2 -sticky w -padx {50 3} -pady 3
+
+  # actions
+  set rw -1
+  incr rw
+  ttk::button .mrk_inst -text [__ "Install marked"] -command {
+      install_pkgs "marked"}
+  pgrid .mrk_inst -in .pkfilter -column 4 -row $rw -sticky ew
+  incr rw
+  ttk::button .mrk_upd -text [__ "Update marked"] -command {
+    update_pkgs "marked"}
+  pgrid .mrk_upd -in .pkfilter -column 4 -row $rw -sticky ew
+  incr rw
+  ttk::button .mrk_rem -text [__ "Remove marked"] -command {
+    remove_pkgs "marked"}
+  pgrid .mrk_rem -in .pkfilter -column 4 -row $rw -sticky ew
+  if $::do_restore {
+    incr rw
+    ttk::button .mrk_rest -text "[__ "Restore from backup"] ..." -command \
+        restore_backups_dialog
+    pgrid .mrk_rest -in .pkfilter -column 4 -row $rw -sticky ew
+  }
+  incr rw
+  ttk::button .upd_tlmgr -text [__ "Update tlmgr"] -command update_tlmgr
+  pgrid .upd_tlmgr -in .pkfilter -column 4 -row $rw -sticky ew
+  incr rw
+  ttk::button .upd_all -text [__ "Update all"] -command update_all
+  pgrid .upd_all -in .pkfilter -column 4 -row $rw -sticky ew
+
+  # search interface; no new row
+  grid [ttk::frame .pksearch] -in .pkfilter -row $rw \
+      -column 0 -columnspan 4 -sticky w
+  ppack [ttk::label .pksearch.l \
+             -text [__ "Search"]] -side left
+  pack [ttk::entry .pksearch.e -width 30] -side left -padx {3 0} -pady 3
+  ppack [ttk::radiobutton .pksearch.n -variable ::search_desc \
+            -value 0 -text [__ "By name"]] -side left
+  ppack [ttk::radiobutton .pksearch.d -variable ::search_desc \
+             -value 1 -text [__ "By name and description"]] -side left
+  bind .pksearch.e <KeyRelease> display_packages_info
+  bind .pksearch.n <ButtonRelease> {set ::search_desc 0; display_packages_info}
+  bind .pksearch.d <ButtonRelease> {set ::search_desc 1; display_packages_info}
+
+  # packages list itself
+  pack [ttk::frame .fpkg] -in .bg -side top -fill both -expand 1
+  ttk::treeview .pkglist -columns \
+      {mk name localrev remoterev shortdesc} \
+      -show headings -height 8 -selectmode extended \
+      -yscrollcommand {.pkvsb set}
+  .pkglist heading mk -text "" -anchor w
+  .pkglist heading name -text [__ "Name"] -anchor w
+  .pkglist heading localrev -text [__ "Local rev. (ver.)"] -anchor w
+  .pkglist heading remoterev -text [__ "Remote rev. (ver.)"] -anchor w
+  .pkglist heading shortdesc -text [__ "Description"] -anchor w
+  .pkglist column mk -width [expr {$::cw * 3}] -stretch 0
+  .pkglist column name -width [expr {$::cw * 25}] -stretch 1
+  .pkglist column localrev -width [expr {$::cw * 18}] -stretch 0
+  .pkglist column remoterev -width [expr {$::cw * 18}] -stretch 0
+  .pkglist column shortdesc -width [expr {$::cw * 50}] -stretch 1
+
+  ttk::scrollbar .pkvsb -orient vertical -command {.pkglist yview}
+  ppack .pkglist -in .fpkg -side left -expand 1 -fill both
+  ppack .pkvsb -in .fpkg -side left -fill y
+
+  # "#1" refers to the first column (with mark symbols)
+  bind .pkglist <space> {toggle_marked_pkg [.pkglist focus] "#1"}
+  bind .pkglist <Return> {toggle_marked_pkg [.pkglist focus] "#1"}
+  # only toggle when column is "mk" i.e. #1
+  bind .pkglist <ButtonRelease-1> {toggle_marked_pkg [
+      .pkglist identify item %x %y] [.pkglist identify column %x %y]}
+
+  menu .pkg_popup ; # entries added on-the-fly
+  bind .pkglist <<RightClick>> {do_package_popup_menu %x %y %X %Y}
+  if $::plain_unix {
+    bind .pkg_popup <Leave> {.pkg_popup unpost}
+  }
+
+  wm protocol . WM_DELETE_WINDOW {cancel_or_destroy .q .}
+  wm resizable . 1 1
+  wm state . normal
+  raise .
+}
+
+proc display_all_data {} {
+  # (re)display all data
+  if {$::tcl_platform(platform) eq "windows"} {
+    .topfr.ladmin configure -text \
+        [expr {$::multiuser ? [__ "Multi-user"] : [__ "Single-user"]}]
+  }
+  # svns for  tlmgr and tlshell
+  .topfr.linfra configure -text \
+      "tlmgr: r[dict get $::pkgs texlive.infra localrev]"
+  .topfr.lshell configure -text \
+      "tlshell: r[dict get $::pkgs tlshell localrev]"
+  show_repos
+  display_packages_info
+  display_updated_globals
+}
+
+# to be invoked at initialization and after a font scaling change
+proc rebuild_interface {} {
+  foreach c [winfo children .] {catch {destroy $c}}
+
+  # for busy/idle indicators
+  set ::busy [__ "Idle"]
+  populate_main
+  display_all_data
+  if {$::tcl_platform(platform) eq "windows"} {wm deiconify .}
+}
 
 ##### initialize ######################################################
 
 proc initialize {} {
   # seed random numbers
   expr {srand([clock seconds])}
-  # unix: make sure TL comes first on process searchpath
-  if {$::tcl_platform(platform) ne "windows"} {
-    set texbin [file dirname [file normalize [info script]]]
-    set savedir [pwd]
-    cd $texbin
-    set texbin [pwd]
-    cd $savedir
-    # prepend texbin to PATH, unless it is already the _first_
-    # path component
-    set dirs [split $::env(PATH) ":"]
-    if {[lindex $dirs 0] ne $texbin} {
-      set ::env(PATH) "${texbin}:$::env(PATH)"
-    }
-    # now is a good time to ask tlmgr for the _TL_ name of our platform
-    set ::our_platform [exec tlmgr print-platform]
-  }
+
   # directory for temp files
   set attemptdirs {}
   foreach tmp {TMPDIR TEMP TMP} {
@@ -2172,6 +2491,9 @@ proc initialize {} {
     set ::flid [open $fname w]
   }
 
+  # store language in tlmgr configuration
+  save_config_var "gui-lang" $::lang
+
   # in case we are going to do something with json:
   # add json subdirectory to auto_path, but at low priority
   # since the tcl/tk installation may already have a better implementation.
@@ -2181,12 +2503,26 @@ proc initialize {} {
 
   populate_main
 
-  start_tlmgr
-  get_repos_from_tlmgr
-  .topf.lrepos configure -text [print_repos]
+  # testing writablilty earlier led to sizing problems
+  if {! [dir_writable $::instroot]} {
+    set ans [tk_messageBox -type yesno -icon warning -message \
+         [__ "%s is not writable. You can probably not do much.
+  Are you sure you want to continue?" $::instroot]]
+    if {$ans ne "yes"} {exit}
+  }
+
+  start_tlmgr {*}$::argv
+  if {$::tcl_platform(platform) eq "windows"} {
+    run_cmd_waiting "option multiuser"
+    set ::multiuser 0
+    foreach l $::out_log {
+      if [regexp {^\s*multiuser\s+([01])\s*$} $l d ::multiuser] break
+    }
+  }
   get_packages_info_local
-  collect_filtered ; # invokes display_packages_info
-  enable_menu_controls 1
+  collect_filtered
+  get_repos_from_tlmgr
+  display_all_data
 }; # initialize
 
 initialize

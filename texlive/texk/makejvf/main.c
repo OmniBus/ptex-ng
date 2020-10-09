@@ -11,7 +11,7 @@
 
 FILE *vfp,*afp=NULL;
 char *atfmname,*vtfmname,*afmname,*vfname,*kanatfm,*jistfm,*ucsqtfm,*usertable;
-int kanatume=-1,chotai=0,baseshift=0,minute=0,useset3=0,hankana=0,fidzero=0,enhanced=0;
+int kanatume=-1,chotai=0,baseshift=0,minute=0,useset3=0,hankana=0,fidzero=0,enhanced=0,omitzw=0;
 int pstfm_nt;
 long ucs=0;
 
@@ -20,13 +20,13 @@ int main(int argc, char ** argv)
 	int i,j;
 	int c;
 	long ch,ch_max;
+	const char *atfmname_base;
 
 	kpse_set_program_name(argv[0], "makejvf");
 	set_enc_string("sjis", "euc");
 
-	while ((c = getopt (argc, argv, "k:K:Ca:b:mu:3J:U:Hiet:")) != -1)
+	while ((c = getopt (argc, argv, "k:K:Ca:b:mu:3J:U:Hiet:O")) != -1)
 		switch (c) {
-
 
 		case 'k':
 			kanatume = atoi(optarg);
@@ -93,6 +93,9 @@ int main(int argc, char ** argv)
 		case 'e':
 			enhanced=1;
 			break;
+		case 'O':
+			omitzw=1;
+			break;
 		case 't':
 			usertable = xstrdup(optarg);
 			break;
@@ -103,7 +106,7 @@ int main(int argc, char ** argv)
 
 	if (kanatume>=0 && !afp) {
 		fprintf(stderr,"No AFM file for kanatume.\n");
-		exit(100);
+		exit(101);
 	}
 
 	if (argc - optind != 2) {
@@ -111,26 +114,83 @@ int main(int argc, char ** argv)
 		exit(0);
 	}
 
-	atfmname = xmalloc(strlen(argv[optind])+4);
-	strcpy(atfmname, argv[optind]);
+	atfmname = xstrdup(argv[optind]);
+	if (FILESTRCASEEQ(&atfmname[strlen(atfmname)-4], ".tfm")) {
+		atfmname[strlen(atfmname)-4] = '\0';
+	}
 
-	{
-		const char *p = xbasename(argv[optind]);
-		vfname = xmalloc(strlen(p)+4);
-		strcpy(vfname, p);
-	}
-	if (FILESTRCASEEQ(&vfname[strlen(vfname)-4], ".tfm")) {
-		vfname[strlen(vfname)-4] = '\0';
-	}
+	atfmname_base = xbasename(atfmname);
+	vfname = xmalloc(strlen(atfmname_base)+4);
+	strcpy(vfname, atfmname_base);
 	strcat(vfname,".vf");
 
 	vtfmname = xstrdup(argv[optind+1]);
 	if (FILESTRCASEEQ(&vtfmname[strlen(vtfmname)-4], ".tfm")) {
 		vtfmname[strlen(vtfmname)-4] = '\0';
 	}
+	if (FILESTRCASEEQ(&vtfmname[0], &atfmname_base[0])) {
+		fprintf(stderr,"Invalid usage: input TFM and output TFM must be different.\n");
+		exit(102);
+	}
 
-	tfmget(atfmname);
+	if (kanatfm) {
+		if (FILESTRCASEEQ(&kanatfm[strlen(kanatfm)-4], ".tfm")) {
+			kanatfm[strlen(kanatfm)-4] = '\0';
+		}
+		if (FILESTRCASEEQ(&kanatfm[0], &atfmname_base[0])) {
+			fprintf(stderr,"Invalid usage: input TFM and output TFM must be different.\n");
+			exit(102);
+		}
+	}
 
+	if (!ucs) {
+		if (jistfm) {
+			fprintf(stderr,"[Warning] Option -J invalid in non-UCS mode, ignored.\n");
+			jistfm = NULL;
+		}
+		if (ucsqtfm) {
+			fprintf(stderr,"[Warning] Option -U invalid in non-UCS mode, ignored.\n");
+			ucsqtfm = NULL;
+		}
+		if (useset3) {
+			fprintf(stderr,"[Warning] Option -3 invalid in non-UCS mode, ignored.\n");
+			useset3 = 0;
+		}
+		if (hankana) {
+			fprintf(stderr,"[Warning] Option -H invalid in non-UCS mode, ignored.\n");
+			hankana = 0;
+		}
+	}
+
+	if (jistfm && ucsqtfm) {
+		fprintf(stderr,"Options -J and -U at the same time? I'm confused.\n");
+		exit(110);
+	}
+
+	if (jistfm) {
+		if (FILESTRCASEEQ(&jistfm[strlen(jistfm)-4], ".tfm")) {
+			jistfm[strlen(jistfm)-4] = '\0';
+		}
+		if (FILESTRCASEEQ(&jistfm[0], &atfmname_base[0])) {
+			fprintf(stderr,"Invalid usage: input TFM and output TFM must be different.\n");
+			exit(102);
+		}
+	}
+
+	if (ucsqtfm) {
+		if (FILESTRCASEEQ(&ucsqtfm[strlen(ucsqtfm)-4], ".tfm")) {
+			ucsqtfm[strlen(ucsqtfm)-4] = '\0';
+		}
+		if (FILESTRCASEEQ(&ucsqtfm[0], &atfmname_base[0])) {
+			fprintf(stderr,"Invalid usage: input TFM and output TFM must be different.\n");
+			exit(102);
+		}
+	}
+
+	if (omitzw && usertable) {
+		fprintf(stderr,"Invalid usage: conflict options -O and -t.\n");
+		exit(120);
+	}
 	if (usertable) {
 		get_usertable(usertable);
 	}
@@ -141,15 +201,17 @@ int main(int argc, char ** argv)
 	}
 	if (ucs==ENTRY_CUSTOM && usertable_charset_max<1) {
 		fprintf(stderr,"No custom charset definition in usertable.\n");
-		exit(101);
+		exit(130);
 	}
+
+	tfmget(atfmname);
 
 	vfp = vfopen(vfname);
 
 	pstfm_nt=1; /* initialize */
 	if (ucs) {
 		if (ucs==ENTRY_CUSTOM) ch_max=usertable_charset[usertable_charset_max-1].max;
-		else if (useset3) ch_max=0x2FFFF;
+		else if (useset3) ch_max=0x3FFFF;
 		else ch_max=0xFFFF;
 		for (ch=0;ch<=ch_max;ch++) {
 			if (search_cjk_entry(ch,ucs))
@@ -164,9 +226,6 @@ int main(int argc, char ** argv)
 	vfclose(vfp);
 
 	if (kanatfm) {
-		if (FILESTRCASEEQ(&kanatfm[strlen(kanatfm)-4], ".tfm")) {
-			kanatfm[strlen(kanatfm)-4] = '\0';
-		}
 		maketfm(kanatfm);
 		pstfm_nt=1; /* already done*/
 	}
@@ -174,19 +233,9 @@ int main(int argc, char ** argv)
 	maketfm(vtfmname);
 	pstfm_nt=1; /* already done*/
 
-	if (jistfm) {
-		if (FILESTRCASEEQ(&jistfm[strlen(jistfm)-4], ".tfm")) {
-			jistfm[strlen(jistfm)-4] = '\0';
-		}
-		maketfm(jistfm);
-	}
+	if (jistfm) maketfm(jistfm);
 
-	if (ucsqtfm) {
-		if (FILESTRCASEEQ(&ucsqtfm[strlen(ucsqtfm)-4], ".tfm")) {
-			ucsqtfm[strlen(ucsqtfm)-4] = '\0';
-		}
-		maketfm(ucsqtfm);
-	}
+	if (ucsqtfm) maketfm(ucsqtfm);
 
 	exit(0);
 }
@@ -213,6 +262,7 @@ void usage(void)
 	fputs2("-e           Enhanced mode; the horizontal shift amount is determined\n", stderr);
 	fputs2("             from the glue/kern table of <TFMfile> input\n", stderr);
 	fputs2("-t <CNFfile> Use <CNFfile> as a configuration file\n", stderr);
+	fputs2("-O           Omit entries in VF for characters with default metric\n", stderr);
 	fputs2("-u <Charset> UCS mode\n", stderr);
 	fputs2("             <Charset> gb : GB,  cns : CNS,  ks : KS\n", stderr);
 	fputs2("                       jis : JIS,  jisq : JIS quote only\n", stderr);

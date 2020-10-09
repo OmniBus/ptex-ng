@@ -23,8 +23,9 @@ dosection(sectiontype *s, int c)
    int np;
    int k;
    integer thispage = 0;
-   char buf[104];
+   char buf[300]; /* really 253 */
 
+   bmenc_startsection() ;
    dopsfont(s);
 #ifdef HPS
 	 if (HPS_FLAG) pagecounter = 0;
@@ -40,7 +41,9 @@ dosection(sectiontype *s, int c)
    doubleout(mag);
    numout((integer)DPI);
    numout((integer)VDPI);
-   snprintf(buf, sizeof(buf), "(%.99s)", fulliname);
+   /* possibly lines in eps files are supposed to be <= 255;
+      not worth testing the limits merely to output a long file name. */
+   snprintf(buf, sizeof(buf), "(%.250s)", fulliname);
    cmdout(buf);
    newline();
    cmdout("@start");

@@ -1,3 +1,86 @@
+2020-05-14  Karl Berry  <karl@freefriends.org>
+
+	* kpse-pkgs.m4 (KPSE_LIBS_PKGS),
+	(KPSE_POPPLER_SYSTEM_FLAGS): remove poppler.
+	* kpse-poppler-flags.m4: remove file.
+	* kpse-xpdf-flags.m4 (KPSE_XPDF_OPTIONS): no more system option.
+	(KPSE_XPDF_SYSTEM_FLAGS): no-op.
+
+2020-04-21 Luigi Scarso <luigi.scarso@gmail.com>
+
+	* kpse-pkgs.m4 (KPSE_LIBS_PKGS): add pplib.
+	* Add kpse-pplib-flags.m4.
+
+2020-03-14  Karl Berry  <karl@freefriends.org>
+
+	* kpse-setup.m4 (KPSE_SETUP): make that powerpc*, not powerpc-*.
+	Johannes H tlbuild mail, 16 Feb 2020 23:09:54.
+
+2020-03-12  Karl Berry  <karl@freefriends.org>
+
+	* kpse-setup.m4 (KPSE_SETUP): disable jit programs on any
+	powerpc-*, not just powerpc-darwin, since jit is also unavailable
+	on powerpc-linux (specifically powerpc64le-unknown-linux-gnu),
+	per Johannes Hielscher. Although apparently there are patches to
+	"floating around" to make jit work on powerpc, they are not in TL,
+	and let's await anyone who actually needs them before refining.
+	https://tug.org/pipermail/tlbuild/2020q1/004627.html (item 1).
+
+2020-01-13  Karl Berry  <karl@tug.org>
+
+	* kpse-setup.m4 (KPSE_SETUP): use AS_TR_SH on the argument when
+	disabling the jit packages, for the sake of making mfluajit-nowin
+	into mfluajit_nowin for shell usage.
+	Also change one "WIN32" to "Windows" in an error message.
+
+2020-01-12  Mojca Miklavec  <mojca.miklavec.lists@gmail.com>
+
+	* kpse-setup.m4 (KPSE_SETUP): also disable mfluajit and mfluajit-nowin.
+
+2019-06-26  Karl Berry  <karl@freefriends.org>
+
+	* kpse-harfbuzz-flags.m4 (KPSE_HARFBUZZ_FLAGS): omit KPSE_ICU_FLAGS.
+	(KPSE_HARFBUZZ_SYSTEM_FLAGS): call pkg-config harfbuzz,
+	not harfbuzz-icu.
+
+2019-03-25  Karl Berry  <karl@freefriends.org>
+
+	* kpse-freetype2-flags.m4 (KPSE_FREETYPE2_SYSTEM_FLAGS): try
+	pkg-config if freetype-config is not available. From Debian.
+
+2019-02-18  Luigi Scarso  <luigi.scarso@gmail.com>
+
+	* kpse-win32.m4 (KPSE_COND_WIN32_WRAP): if w64 and mingw,
+	use different wrapper.
+
+2019-01-11  Karl Berry  <karl@freefriends.org>
+
+	* kpse-luajit-flags.m4 (KPSE_LUAJIT_FLAGS): try LIBLUAJIT_LDEXTRA,
+	following (sort of):
+	https://github.com/TeX-Live/luatex/commit/273de1c6308ab9378905a5e1929b19207e2765af
+
+2019-01-10  Karl Berry  <karl@freefriends.org>
+
+	* kpse-luajit-flags.m4 (KPSE_LUAJIT_FLAGS): check for
+	-lc++abi -lpthread, needed with clang on openbsd.
+	Test from Mojca.
+
+2019-01-08  Karl Berry  <karl@tug.org>
+
+	* kpse-pkgs.m4 (KPSE_LIBS_PKGS): lua52 gone.
+
+2018-12-24  Karl Berry  <karl@freefriends.org>
+
+	* kpse-common.m4,
+	* kpse-pkgs.m4,
+	* kpse-setup.m4,
+	* kpse-visibility.m4: consistently use tldbg in tracing messages,
+	both in the configure scripts and the config.log transcript.
+	* kpse-icu-flags.m4 (_KPSE_ICU_FLAGS): special case to include
+	-lpthread when $build_os is openbsd. Reported by Mojca and Nelson
+	and others, e.g.,
+	https://tug.org/pipermail/tlbuild/2017q2/003799.html
+
 2018-08-27  Karl Berry  <karl@freefriends.org>
 
 	* kpse-potrace-flags.m4: remove file, again bundled with dvisvgm.

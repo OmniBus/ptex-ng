@@ -4,12 +4,19 @@
 assert('String#%') do
   assert_equal "one=1", "one=%d" % 1
   assert_equal "1 one", "%d %s" % [ 1, "one" ]
-  assert_equal "1.0", "%3.1f" % 1.01 if class_defined?("Float")
   assert_equal "123 < 456", "%{num} < %<str>s" % { num: 123, str: "456" }
   assert_equal 15, ("%b" % (1<<14)).size
+  skip unless Object.const_defined?(:Float)
+  assert_equal "1.0", "%3.1f" % 1.01
+  assert_equal " 123456789.12", "% 4.2f" % 123456789.123456789
+  assert_equal "123456789.12", "%-4.2f" % 123456789.123456789
+  assert_equal "+123456789.12", "%+4.2f" % 123456789.123456789
+  assert_equal "123456789.12", "%04.2f" % 123456789.123456789
+  assert_equal "00000000123456789.12", "%020.2f" % 123456789.123456789
 end
 
 assert('String#% with inf') do
+  skip unless Object.const_defined?(:Float)
   inf = Float::INFINITY
 
   assert_equal "Inf", "%f" % inf
@@ -35,9 +42,10 @@ assert('String#% with inf') do
   assert_equal " Inf", "% 3f" % inf
   assert_equal " Inf", "% 4f" % inf
   assert_equal "  Inf", "% 5f" % inf
-end if class_defined?("Float")
+end
 
 assert('String#% with nan') do
+  skip unless Object.const_defined?(:Float)
   nan = Float::NAN
 
   assert_equal "NaN", "%f" % nan
@@ -63,29 +71,6 @@ assert('String#% with nan') do
   assert_equal " NaN", "% 3f" % nan
   assert_equal " NaN", "% 4f" % nan
   assert_equal "  NaN", "% 5f" % nan
-end if class_defined?("Float")
-
-assert("String#% with invalid chr") do
-  begin
-    class Fixnum
-      alias_method :chr_, :chr if method_defined?(:chr)
-
-      def chr
-        nil
-      end
-    end
-
-    assert_raise TypeError do
-      "%c" % 0x80
-    end
-  ensure
-    class Fixnum
-      if method_defined?(:chr_)
-        alias_method :chr, :chr_
-        remove_method :chr_
-      end
-    end
-  end
 end
 
 assert("String#% %b") do

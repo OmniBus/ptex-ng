@@ -34,6 +34,7 @@
 #include "Lexer.h"
 #include "Parser.h"
 #include "SecurityHandler.h"
+#include "UTF8.h"
 #ifndef DISABLE_OUTLINE
 #include "Outline.h"
 #endif
@@ -44,6 +45,15 @@
 
 #define headerSearchSize 1024	// read this many bytes at beginning of
 				//   file to look for '%PDF'
+
+// Avoid sharing files with child processes on Windows, where sharing
+// can cause problems.
+#ifdef _WIN32
+#  define fopenReadMode "rbN"
+#  define wfopenReadMode L"rbN"
+#else
+#  define fopenReadMode "rb"
+#endif
 
 //------------------------------------------------------------------------
 // PDFDoc
@@ -57,19 +67,7 @@ PDFDoc::PDFDoc(GString *fileNameA, GString *ownerPassword,
   int n, i;
 #endif
 
-  ok = gFalse;
-  errCode = errNone;
-
-  core = coreA;
-
-  file = NULL;
-  str = NULL;
-  xref = NULL;
-  catalog = NULL;
-#ifndef DISABLE_OUTLINE
-  outline = NULL;
-#endif
-  optContent = NULL;
+  init(coreA);
 
   fileName = fileNameA;
 #ifdef _WIN32
@@ -86,18 +84,18 @@ PDFDoc::PDFDoc(GString *fileNameA, GString *ownerPassword,
   // try to open file
   fileName2 = NULL;
 #ifdef VMS
-  if (!(file = fopen(fileName1->getCString(), "rb", "ctx=stm"))) {
+  if (!(file = fopen(fileName1->getCString(), fopenReadMode, "ctx=stm"))) {
     error(errIO, -1, "Couldn't open file '{0:t}'", fileName1);
     errCode = errOpenFile;
     return;
   }
 #else
-  if (!(file = fopen(fileName1->getCString(), "rb"))) {
+  if (!(file = fopen(fileName1->getCString(), fopenReadMode))) {
     fileName2 = fileName->copy();
     fileName2->lowerCase();
-    if (!(file = fopen(fileName2->getCString(), "rb"))) {
+    if (!(file = fopen(fileName2->getCString(), fopenReadMode))) {
       fileName2->upperCase();
-      if (!(file = fopen(fileName2->getCString(), "rb"))) {
+      if (!(file = fopen(fileName2->getCString(), fopenReadMode))) {
 	error(errIO, -1, "Couldn't open file '{0:t}'", fileName);
 	delete fileName2;
 	errCode = errOpenFile;
@@ -122,19 +120,7 @@ PDFDoc::PDFDoc(wchar_t *fileNameA, int fileNameLen, GString *ownerPassword,
   Object obj;
   int i;
 
-  ok = gFalse;
-  errCode = errNone;
-
-  core = coreA;
-
-  file = NULL;
-  str = NULL;
-  xref = NULL;
-  catalog = NULL;
-#ifndef DISABLE_OUTLINE
-  outline = NULL;
-#endif
-  optContent = NULL;
+  init(coreA);
 
   // save both Unicode and 8-bit copies of the file name
   fileName = new GString();
@@ -147,17 +133,13 @@ PDFDoc::PDFDoc(wchar_t *fileNameA, int fileNameLen, GString *ownerPassword,
 
   // try to open file
   // NB: _wfopen is only available in NT
-/*
   version.dwOSVersionInfoSize = sizeof(version);
   GetVersionEx(&version);
   if (version.dwPlatformId == VER_PLATFORM_WIN32_NT) {
-    file = _wfopen(fileNameU, L"rb");
+    file = _wfopen(fileNameU, wfopenReadMode);
   } else {
-*/
-    file = fopen(fileName->getCString(), "rb");
-/*
+    file = fopen(fileName->getCString(), fopenReadMode);
   }
-*/
   if (!file) {
     error(errIO, -1, "Couldn't open file '{0:t}'", fileName);
     errCode = errOpenFile;
@@ -172,15 +154,76 @@ PDFDoc::PDFDoc(wchar_t *fileNameA, int fileNameLen, GString *ownerPassword,
 }
 #endif
 
+PDFDoc::PDFDoc(char *fileNameA, GString *ownerPassword,
+	       GString *userPassword, PDFCore *coreA) {
+/*
+#ifdef _WIN32
+  OSVERSIONINFO version;
+#endif
+*/
+  Object obj;
+/*
+#ifdef _WIN32
+  Unicode u;
+  int n, i, j;
+#endif
+*/
+
+  init(coreA);
+
+  fileName = new GString(fileNameA);
+
+#if defined(_WIN32)
+#if 0
+  n = 0;
+  i = 0;
+  while (getUTF8(fileName, &i, &u)) {
+    ++n;
+  }
+  fileNameU = (wchar_t *)gmallocn(n + 1, sizeof(wchar_t));
+  i = j = 0;
+  while (j < n && getUTF8(fileName, &i, &u)) {
+    fileNameU[j++] = (wchar_t)u;
+  }
+  fileNameU[n] = L'\0';
+  // NB: _wfopen is only available in NT
+  version.dwOSVersionInfoSize = sizeof(version);
+  GetVersionEx(&version);
+  if (version.dwPlatformId == VER_PLATFORM_WIN32_NT) {
+    file = _wfopen(fileNameU, wfopenReadMode);
+  } else {
+#endif /* 0 */
+    file = fopen(fileName->getCString(), fopenReadMode);
+#if 0
+  }
+#endif /* 0 */
+#elif defined(VMS)
+  file = fopen(fileName->getCString(), fopenReadMode, "ctx=stm");
+#else
+  file = fopen(fileName->getCString(), fopenReadMode);
+#endif
+
+  if (!file) {
+    error(errIO, -1, "Couldn't open file '{0:t}'", fileName);
+    errCode = errOpenFile;
+    return;
+  }
+
+  // create stream
+  obj.initNull();
+  str = new FileStream(file, 0, gFalse, 0, &obj);
+
+  ok = setup(ownerPassword, userPassword);
+}
+
 PDFDoc::PDFDoc(BaseStream *strA, GString *ownerPassword,
 	       GString *userPassword, PDFCore *coreA) {
 #ifdef _WIN32
   int n, i;
 #endif
 
-  ok = gFalse;
-  errCode = errNone;
-  core = coreA;
+  init(coreA);
+
   if (strA->getFileName()) {
     fileName = strA->getFileName()->copy();
 #ifdef _WIN32
@@ -197,15 +240,22 @@ PDFDoc::PDFDoc(BaseStream *strA, GString *ownerPassword,
     fileNameU = NULL;
 #endif
   }
-  file = NULL;
   str = strA;
+  ok = setup(ownerPassword, userPassword);
+}
+
+void PDFDoc::init(PDFCore *coreA) {
+  ok = gFalse;
+  errCode = errNone;
+  core = coreA;
+  file = NULL;
+  str = NULL;
   xref = NULL;
   catalog = NULL;
 #ifndef DISABLE_OUTLINE
   outline = NULL;
 #endif
   optContent = NULL;
-  ok = setup(ownerPassword, userPassword);
 }
 
 GBool PDFDoc::setup(GString *ownerPassword, GString *userPassword) {

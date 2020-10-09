@@ -350,7 +350,7 @@ use just +1; # a JustLib application
 use strict;
 use integer;
 use Htex::papers;
-BEGIN { $Htex::a2ping::VERSION="2.83p" }
+BEGIN { $Htex::a2ping::VERSION="2.84p" }
 
 # Imp: option to ignore `%%Orientation: Portrait', which gs respects and rotates by 90 degrees if necessary
 # Imp: gs(704?!) sometimes finds too small bbox, see Univers.eps
@@ -399,7 +399,7 @@ BEGIN { $Htex::a2ping::VERSION="2.83p" }
 
 ### program identification
 my $program = "a2ping.pl";
-my $filedate="2018-03-07";  # See also $Htex::a2ping::VERSION.
+my $filedate="2019-11-17";  # See also $Htex::a2ping::VERSION.
 my $copyright = "Written by <pts\@fazekas.hu> from April 2003.
 This is free software, GNU GPL >=2.0. There is NO WARRANTY.
 (epstopdf 2.7 Copyright 1998-2001 by Sebastian Rahtz et al.)\n";
@@ -778,8 +778,9 @@ $GS=$::opt_gs_cmd if defined $::opt_gs_cmd;
 my $CGS=$GS;
 $CGS=$::opt_gs_ccmd if defined $::opt_gs_ccmd;
 # vvv SUXX: (r) file doesn't work with gs 8.5x -DSAFER
-#$GS.= " -dSAFER"; # -dWRITESYSTEMDICT
-#$CGS.=" -dSAFER"; # -dWRITESYSTEMDICT
+# -dNOSAFER to override SAFER activated by default since gs 9.50
+$GS.= " -dNOSAFER"; # -dWRITESYSTEMDICT
+$CGS.=" -dNOSAFER"; # -dWRITESYSTEMDICT
 
 ### get input and output filename
 if (!defined $InputFilename and defined $OutputFilename) { # --filter
@@ -2277,6 +2278,8 @@ just::end __END__
 
 Dat: `=item * foo' is wrong, puts big space between `*' and `foo'
 
+=encoding latin1
+
 =begin man
 
 .ds pts-dev \*[.T]
@@ -2293,7 +2296,7 @@ Dat: `=item * foo' is wrong, puts big space between `*' and `foo'
 .\}
 .ad n
 
-=end
+=end man
 
 =head1 NAME
 
@@ -2377,7 +2380,11 @@ Show the man page
 
 Show progress and debug messages (default: no)
 
+=back
+
 =head2 Options for the Bounding box
+
+=over 2
 
 =item B<--(no)hires>
 
@@ -2399,8 +2406,11 @@ Method for determining the BoundingBox  (default: guess)
 
 Allow page content below and left of the origin (default: no)
 
+=back
 
 =head2 Options for graphics and fonts
+
+=over 2
 
 =item B<--(no)compress>
 
@@ -2422,8 +2432,11 @@ allow lossy image filters (EPS->PDF) (default: yes)
 
 min color for 1 in 8->1 bit conv  (default: 128)
 
+=back
 
 =head2 Options for debugging and changing internals
+
+=over 2
 
 =item B<--(no)tmpunlink>
 
@@ -2446,6 +2459,7 @@ Pass extra arguments to gs
 
 Pass extra arguments to external program (i.e pdftops)
 
+=back
 
 =head1 TIPS AND TRICKS
 

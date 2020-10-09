@@ -175,6 +175,7 @@ void initialize_commands(void)
     primitive_luatex("breakafterdirmode", assign_int_cmd, int_base + break_after_dir_mode_code, int_base);
     primitive_luatex("exceptionpenalty", assign_int_cmd, int_base + exception_penalty_code, int_base);
     primitive_luatex("fixupboxesmode", assign_int_cmd, int_base + fixup_boxes_code, int_base);
+    primitive_luatex("glyphdimensionsmode", assign_int_cmd, int_base + glyph_dimensions_code, int_base);
 
     /*tex
 
@@ -899,6 +900,9 @@ void initialize_etex_commands(void)
     primitive_etex("glueshrinkorder", last_item_cmd, glue_shrink_order_code, 0);
     primitive_etex("gluestretch", last_item_cmd, glue_stretch_code, 0);
     primitive_etex("glueshrink", last_item_cmd, glue_shrink_code, 0);
+
+    primitive_luatex("eTeXgluestretchorder", last_item_cmd, eTeX_glue_stretch_order_code, 0);
+    primitive_luatex("eTeXglueshrinkorder", last_item_cmd, eTeX_glue_shrink_order_code, 0);
 
     primitive_etex("mutoglue", last_item_cmd, mu_to_glue_code, 0);
     primitive_etex("gluetomu", last_item_cmd, glue_to_mu_code, 0);

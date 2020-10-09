@@ -1174,6 +1174,7 @@ static long pack_real(card8 * dest, long destlen, double value)
     long e;
     int i = 0, pos = 2;
     int res;
+    char local_work_buffer[WORK_BUFFER_SIZE]; 
 #define CFF_REAL_MAX_LEN 17
     if (destlen < 2)
         normal_error("cff","buffer overflow (6)");
@@ -1199,20 +1200,23 @@ static long pack_real(card8 * dest, long destlen, double value)
             e--;
         }
     }
-    res = sprintf(work_buffer, "%1.14g", value);
+    res = sprintf(local_work_buffer, "%1.14g", value);
+    if ( (dest>((card8*)(work_buffer))) &&  (dest-((card8*)work_buffer))<(res+1)) {
+       normal_warning("cff","invalid real value to pack. Continuing, but the font looks wrong.");
+    }
     if (res<0)
         normal_error("cff","invalid conversion");
     if (res>CFF_REAL_MAX_LEN)
         res=CFF_REAL_MAX_LEN;
     for (i = 0; i < res; i++) {
         unsigned char ch = 0;
-        if (work_buffer[i] == '\0') {
+        if (local_work_buffer[i] == '\0') {
             /*tex In fact |res| should prevent this. */
             break;
-        } else if (work_buffer[i] == '.') {
+        } else if (local_work_buffer[i] == '.') {
             ch = 0x0a;
-        } else if (work_buffer[i] >= '0' && work_buffer[i] <= '9') {
-            ch = (unsigned char) (work_buffer[i] - '0');
+        } else if (local_work_buffer[i] >= '0' && local_work_buffer[i] <= '9') {
+            ch = (unsigned char) (local_work_buffer[i] - '0');
         } else {
             normal_error("cff","invalid character");
         }
@@ -1247,15 +1251,15 @@ static long pack_real(card8 * dest, long destlen, double value)
         pos++;
     }
     if (e != 0) {
-        sprintf(work_buffer, "%ld", e);
+        sprintf(local_work_buffer, "%ld", e);
         for (i = 0; i < CFF_REAL_MAX_LEN; i++) {
             unsigned char ch = 0;
-            if (work_buffer[i] == '\0') {
+            if (local_work_buffer[i] == '\0') {
                 break;
-            } else if (work_buffer[i] == '.') {
+            } else if (local_work_buffer[i] == '.') {
                 ch = 0x0a;
-            } else if (work_buffer[i] >= '0' && work_buffer[i] <= '9') {
-                ch = (unsigned char) (work_buffer[i] - '0');
+            } else if (local_work_buffer[i] >= '0' && local_work_buffer[i] <= '9') {
+                ch = (unsigned char) (local_work_buffer[i] - '0');
             } else {
                 normal_error("cff","invalid character");
             }
@@ -2830,7 +2834,7 @@ void write_cff(PDF pdf, cff_font * cffont, fd_entry * fd)
         The |CIDSet| is a table of bits indexed by cid, bytes with high order bit
         first, each (set) bit is a (present) CID.
     */
-    if (1) {
+    if ((! pdf->omit_cidset) && (pdf->major_version == 1)) {
         int cid;
         cidset = pdf_create_obj(pdf, obj_type_others, 0);
         if (cidset != 0) {
@@ -2884,7 +2888,7 @@ void write_cff(PDF pdf, cff_font * cffont, fd_entry * fd)
     cff_add_string(cffont, "Identity");
     if (cffont->header_major == 2) {
         /*tex A crash. */
-    } else {
+    } else if (cffont->private && (cffont->private)[0]) {
         cff_dict_update(cffont->private[0], cffont);
     }
     cff_update_string(cffont);
@@ -2969,12 +2973,13 @@ void write_cid_cff(PDF pdf, cff_font * cffont, fd_entry * fd)
         The |CIDSet| table is a table of bits indexed by cid, bytes with high
         order bit first, each (set) bit is a (present) CID.
     */
-    if (1) {
+    if ((! pdf->omit_cidset) && (pdf->major_version == 1)) {
         cidset = pdf_create_obj(pdf, obj_type_others, 0);
         if (cidset != 0) {
             size_t l = (last_cid / 8) + 1;
             char *stream = xmalloc(l);
             memset(stream, 0, l);
+            stream[0] |= 1 << 7; /*tex Force |.notdef| into the map. */
             for (cid = 1; cid <= (long) last_cid; cid++) {
                 if (CIDToGIDMap[2 * cid] || CIDToGIDMap[2 * cid + 1]) {
                     stream[(cid / 8)] |= (1 << (7 - (cid % 8)));

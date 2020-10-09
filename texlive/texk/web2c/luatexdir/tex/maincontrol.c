@@ -131,9 +131,15 @@ static void run_node (void) {
         n = copy_node_list(n);
     }
     tail_append(n);
+    if (nodetype_has_attributes(type(n)) && node_attr(n) == null) {
+        build_attribute_list(n);
+    }
     while (vlink(n) != null) {
         n = vlink(n);
         tail_append(n);
+        if (nodetype_has_attributes(type(n)) && node_attr(n) == null) {
+            build_attribute_list(n);
+        }
     }
 }
 
@@ -985,6 +991,7 @@ static void init_main_control (void) {
  /* any_mode(lua_expandable_call_cmd, run_lua_call); */ /* no! outside jump table anyway, handled in expand() */
     any_mode(node_cmd, run_node);
 
+    any_mode(combine_toks_cmd, combine_the_toks);
 }
 
 /*tex
@@ -1035,8 +1042,6 @@ We assume a trailing relax: |{...}\relax|, so we don't need a |back_input()| her
 
 */
 
-/*int local_level = 0; */
-
 extern void local_control_message(const char *s)
 {
     tprint("local control level ");
@@ -1046,11 +1051,29 @@ extern void local_control_message(const char *s)
     tprint_nl("");
 }
 
+/*tex Note for me (HH): in luametatex I have the option to use the save stack which for
+    some experiments seems to work better. But I'll probably not go forward with
+    some intended extension anyway (too messy), so we're currently in sync.
+    Instead there are now two optional parameters in |runtoks|, plus a |quittoks|
+    companion. I also added some more tracing as well as a warning when we jump
+    out of control too often.
+*/
+
 void local_control(void)
 {
+    /*tex Wrr to saving the state local_control is like some of the conv_toks which
+        is not entirely correct but good enough for now. Future extensions might
+        demand another solution.
+    */
+    int      save_scanner_status = scanner_status;
+    halfword save_def_ref = def_ref;
+    halfword save_warning_index = warning_index;
     int ll = local_level;
     main_control_state = goto_next;
     local_level += 1;
+    if (tracing_nesting_par > 2) {
+        local_control_message("entering local control");
+    }
     while (1) {
         if (main_control_state == goto_skip_token) {
             main_control_state = goto_next;
@@ -1069,22 +1092,32 @@ void local_control(void)
         if (local_level <= ll) {
             main_control_state = goto_next;
             if (tracing_nesting_par > 2) {
-                local_control_message("leaving due to level change");
+                local_control_message("leaving local control due to level change");
             }
-            return ;
+            break;
         } else if (main_control_state == goto_return) {
             if (tracing_nesting_par > 2) {
-                local_control_message("leaving due to triggering");
+                local_control_message("leaving local control due to triggering");
             }
-            return;
+            break;
         }
     }
-    return;
+    /*tex From the perspective of ending and changing the level this is the
+        wrong spot, as it should be done in |end_local_control| in which case
+        we should use the save stack. Maybe some day.
+    */
+    scanner_status = save_scanner_status;
+    def_ref = save_def_ref;
+    warning_index = save_warning_index;
 }
 
 void end_local_control(void )
 {
-    local_level -= 1;
+    if (local_level > 0) {
+        local_level -= 1;
+    } else {
+        local_control_message("redundant end local control");
+   }
 }
 
 /*tex
@@ -2170,10 +2203,20 @@ void build_local_box(void)
     p = vlink(head);
     pop_nest();
     if (p != null) {
-        /*tex Somehow |filtered_hpack| goes beyond the first node so we loose it. */
-        new_hyphenation(p, null);
+        /*tex
+            Somehow |filtered_hpack| goes beyond the first node so we loose it.
+        */
+        /*tex
+            There is no need for |new_hyphenation(p, null);| here as we're in
+            an |\hbox|.
+        */
         (void) new_ligkern(p, null);
         p = lua_hpack_filter(p, 0, additional, local_box_group, -1, null);
+        /*tex
+            We really need something packed so we play safe! This feature is inherited
+            but could have been delegated to a callback anyway.
+        */
+        p = hpack(p, 0, additional, -1);
     }
     if (kind == 0)
         eq_define(local_left_box_base, box_ref_cmd, p);
@@ -2692,9 +2735,8 @@ void prefixed_command(void)
                     /*tex |letcharcode| */
                     scan_int();
                     if (cur_val > 0) {
-                        cur_cs = active_to_cs(cur_val, true);
-                        set_token_info(cur_cs, cur_cs + cs_token_flag);
-                        p = cur_cs;
+                        /*tex HH: I need to  do a more extensive test later. */
+                        p = active_to_cs(cur_val, true);
                         do {
                             get_token();
                         } while (cur_cmd == spacer_cmd);
@@ -3782,8 +3824,6 @@ void open_or_close_in(void)
         if (cur_cmd != left_brace_cmd) {
             /*tex Set |cur_name| to desired file name. */
             scan_file_name();
-            if (cur_ext == get_nullstr())
-                cur_ext = maketexstring(".tex");
         } else {
             scan_file_name_toks();
         }

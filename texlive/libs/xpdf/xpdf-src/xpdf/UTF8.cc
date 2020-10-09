@@ -6,6 +6,7 @@
 //
 //========================================================================
 
+#include <aconf.h>
 #include "UTF8.h"
 
 int mapUTF8(Unicode u, char *buf, int bufSize) {
@@ -151,7 +152,7 @@ GBool getUTF16BE(GString *s, int *i, Unicode *u) {
     if (*i < s->getLength() - 1) {
       w1 = ((s->getChar(*i) & 0xff) << 8) | (s->getChar(*i + 1) & 0xff);
       *i += 2;
-      *u = 0x10000 + ((w0 - 0xd8000) << 10) + (w1 - 0xdc00);
+      *u = 0x10000 + ((w0 - 0xd800) << 10) + (w1 - 0xdc00);
     } else {
       *u = (Unicode)w0;
     }
@@ -173,7 +174,7 @@ GBool getUTF16LE(GString *s, int *i, Unicode *u) {
     if (*i < s->getLength() - 1) {
       w1 = (s->getChar(*i) & 0xff) | ((s->getChar(*i + 1) & 0xff) << 8);
       *i += 2;
-      *u = 0x10000 + ((w0 - 0xd8000) << 10) + (w1 - 0xdc00);
+      *u = 0x10000 + ((w0 - 0xd800) << 10) + (w1 - 0xdc00);
     } else {
       *u = (Unicode)w0;
     }

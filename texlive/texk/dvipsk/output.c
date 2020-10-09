@@ -20,7 +20,8 @@
 #undef fopen
 #undef popen
 #undef pclose
-#define fopen(file, fmode)  fsyscp_fopen(file, fmode)
+extern FILE *generic_fsyscp_fopen(const char *name, const char *mode);
+#define fopen(file, fmode)  generic_fsyscp_fopen(file, fmode)
 #define popen(pcmd, pmode)  fsyscp_popen(pcmd, pmode)
 #define pclose(pstream) _pclose(pstream)
 #endif
@@ -157,6 +158,14 @@ copyfile_general(const char *s, struct header_list *cur_header)
  *   or figure files to be installed in the .../ps directory.
  */
       f = search(figpath, s, READBIN);
+#if defined(WIN32)
+      if (f == 0 && file_system_codepage != win32_codepage) {
+         int tmpcp = file_system_codepage;
+         file_system_codepage = win32_codepage;
+         f = search(figpath, s, READBIN);
+         file_system_codepage = tmpcp;
+      }
+#endif
       if (f == 0)
          f = search(headerpath, s, READBIN);
 #if defined(VMCMS) || defined (MVSXA)
@@ -176,7 +185,7 @@ copyfile_general(const char *s, struct header_list *cur_header)
       }
 #endif /* VMCMS */
 #else /* VMCMS || MVSXA */
-      sprintf(errbuf, "Could not find figure file %s; continuing.", s);
+      sprintf(errbuf, "Could not find figure file %.500s; continuing.", s);
       if (secure == 2) {
          strcat(errbuf, "\nNote that an absolute path or a relative path with .. are denied in -R2 mode.");
       }
@@ -190,19 +199,20 @@ copyfile_general(const char *s, struct header_list *cur_header)
 #ifndef __THINK__
    case 2:
 #ifdef SECURE
-      sprintf(errbuf, "<%s>: Tick filename execution disabled", s);
+      sprintf(errbuf, "<%.500s>: Tick filename execution disabled", s);
 #else
 #ifdef OS2
       if (_osmode == OS2_MODE) {
 #endif
       if (secure == 0) {
-         sprintf(errbuf, "Execution of  <%s> failed ", s);
+         sprintf(errbuf, "Execution of <%.500s> failed ", s);
          f = popen(s, "r");
          if (f != 0)
             SET_BINARY(fileno(f));
 	}
 	else {
-      sprintf(errbuf,"Secure mode is %d so execute <%s> will not run", secure,s);
+      sprintf(errbuf,"Secure mode is %d so execute <%.500s> will not run",
+              secure, s);
 	}
 #ifdef OS2
       }
@@ -221,7 +231,7 @@ copyfile_general(const char *s, struct header_list *cur_header)
 	 if(f==NULL)
 	    f = search(figpath, s, READBIN);
       }
-      sprintf(errbuf, "! Could not find header file %s.", s);
+      sprintf(errbuf, "! Could not find header file %.500s.", s);
       if (secure == 2) {
          strcat(errbuf, "\nNote that an absolute path or a relative path with .. are denied in -R2 mode.");
       }
@@ -866,6 +876,17 @@ cmdout(const char *s)
    lastspecial = 0;
 }
 
+void psnameout(const char *s) {
+   // we lead with a special, so we don't need the space.
+   lastspecial = 1 ;
+   cmdout(s) ;
+}
+
+void pslineout(const char *s) {
+   fputs(s, bitfile) ;
+   fprintf(bitfile, "\n");
+   linepos = 0;
+}
 
 static void
 chrcmd(char c)
@@ -1447,6 +1468,25 @@ initprinter(sectiontype *sect)
       tell_needed_fonts();
       paperspec(finpapsiz->specdat, 1);
       fprintf(bitfile, "%%%%EndComments\n");
+/*
+ *   If we encode Type 3 fonts with an encoding vector, this can cause
+ *   Distiller's autoorientation to get confused.  We remedy this by
+ *   emitting underdocumented ViewingOrientation comments right after
+ *   EndComments.  Known defect: if a user "flips" the landscape to be
+ *   180 degrees using one of the \special{} commands available, the
+ *   document will be rendered in the viewer upside down.  (But only
+ *   with bitmap font encoding enabled and bitmapped fonts actually used.)
+ *   --tgr, 29 February 2020.
+ */
+      if (encodetype3 && bitmapfontseen) {
+         fprintf(bitfile, "%%%%BeginDefaults\n") ;
+         if (landscape) {
+            fprintf(bitfile, "%%%%ViewingOrientation: 0 -1 1 0\n") ;
+         } else {
+            fprintf(bitfile, "%%%%ViewingOrientation: 1 0 0 1\n") ;
+         }
+         fprintf(bitfile, "%%%%EndDefaults\n") ;
+      }
    }
    {
       int i, len;

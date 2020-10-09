@@ -1,6 +1,164 @@
-2018-09-18 Nick Roessler <nicholas.e.roessler@gmail.com>
-	* fonts/writet1.w (t1_check_unusual_charstring): protect against
-	buffer overflow.
+2020-07-26 Luigi Scarso <luigi.scarso@gmail.com>
+    * fixed: \tracinglostchars>=3 is an error (no fatal error)
+
+2020-07-26 Luigi Scarso <luigi.scarso@gmail.com>
+    * New value for \tracinglostchars: \tracinglostchars>=3 is a fatal error 
+
+2020-07-12 Luigi Scarso <luigi.scarso@gmail.com>
+    * Original reports:
+     https://tex.stackexchange.com/questions/551313/
+     https://tug.org/pipermail/tex-live/2020-June/045876.html
+ 
+    This will probably be fixed by DEK in the 2021 tuneup in a different
+    way (so we'll have to remove or alter this change), but the interaction
+    sequence in the reports above causes a segmentation fault in web2c -
+    writing to the closed \write15 stream because we wrongly decrement
+    selector from 16 to 15 in term_input, due to the lack of this check in
+    recursive error() call (K. Berry)
+
+
+2020-07-04 Luigi Scarso <luigi.scarso@gmail.com>
+    * little endian variants for readers. (HH)
+    * The keyword \type {norule} will hide the rule with the above variants while
+      keeping the rule related spacing.  (HH)
+
+2020-06-21 Luigi Scarso <luigi.scarso@gmail.com>
+    * pending better is_defined check plus an extra option in a scanner; also the \cs case. (HH)
+    * tex.getmark(what,wherefrom)  added (HH)
+
+2020-05-01 Luigi Scarso <luigi.scarso@gmail.com>
+    * added tex.interlinepenalties tex.clubpenalties tex.widowpenalties 
+    tex.displaywidowpenalties to complement tex.parshape (HH)
+
+2020-04-28 Luigi Scarso <luigi.scarso@gmail.com>
+    * less strict lastnode testing (HH) 
+    * some experimental math delimiter code removed (HH)
+
+2020-04-27 Luigi Scarso <luigi.scarso@gmail.com>
+    * similar treatment for shiftdown as shiftup in operators (no
+     checking) (HH)
+
+2020-04-07 Luigi Scarso <luigi.scarso@gmail.com>
+    * Version 1.13.0. 
+      getstring extra argument to pdfe.getstring (triggers unencoded or flag
+      return values) (HH).
+
+2020-03-09 Luigi Scarso <luigi.scarso@gmail.com>
+    * texluahb / texluahbjit for luahbtex / luajithbtex
+
+2020-03-09 Luigi Scarso <luigi.scarso@gmail.com>
+    * --shell-restricted now forbids loading of dso (dll/so object)
+
+2020-03-09 Luigi Scarso <luigi.scarso@gmail.com>
+    * append_vlist : node|nil [prevdepth] (fix + extension/warning) (HH)
+
+2020-03-01 Luigi Scarso <luigi.scarso@gmail.com>
+    * fixed lua stack overflow in run_put_next (M. Kruger)
+
+2020-02-29 Luigi Scarso <luigi.scarso@gmail.com>
+    * luahbtex: add (single codepoint) "add" method to buffer (M.Kruger)
+
+2020-03-06  Karl Berry  <karl@tug.org>
+
+    * am/luatex.am (texlua[jit][c]) [LUA[JIT]HBTEX && !LUA[JIT]TEX]:
+    keep these as links to base lua[jit]tex, not overwriting
+    with links to luahb[jit]tex, unless the base luatex is not installed.
+    https://tug.org/pipermail/tex-live/2020-March/044948.html
+    (and preceding)
+
+2020-02-12  Luigi Scarso <luigi.scarso@gmail.com>
+    * restore state for \input delimited with {}
+
+2020-02-11  Luigi Scarso <luigi.scarso@gmail.com>
+    * patches for -fno-common (thanks to D. Seifert of Gentoo team)
+
+
+2020-01-25  Luigi Scarso <luigi.scarso@gmail.com>
+    * sync with upstream pplib 
+    * sync with upstream luaharfbuzz 
+
+
+2020-01-11  Luigi Scarso <luigi.scarso@gmail.com>
+    * shape fix (HH)
+
+2020-01-03  Luigi Scarso <luigi.scarso@gmail.com>
+    * luatex 1.12.0: updated to pplib 2.0
+
+2020-01-02  Luigi Scarso <luigi.scarso@gmail.com>
+    * better separation between luatex and luahbtex at build time
+
+
+2019-12-31  Luigi Scarso <luigi.scarso@gmail.com>
+    * scaled virtual font (HH)
+
+
+2019-12-19  Luigi Scarso <luigi.scarso@gmail.com>
+    * fixed inclusion of pdf files with a invalid pageDict (exit, don't load it)
+
+
+2019-12-11  Luigi Scarso <luigi.scarso@gmail.com>
+    * add catcode table check to set_macro (HH)
+
+
+2019-12-05  Luigi Scarso <luigi.scarso@gmail.com>
+    * two fixes for lua user nodes (error report of Sigitas Tolusis <sigitas@vtex.lt> )
+
+
+2019-11-08  Luigi Scarso <luigi.scarso@gmail.com>
+    * record a few more files (in kpse enabled mode) (HH)
+    * better recorder code in wrapped lua
+
+2019-11-05  Luigi Scarso <luigi.scarso@gmail.com>
+    * fixed calculation of  if (abs(fit_class - fitness(r)) > 1)
+      in lineabreak.c (thanks to M. Krüger). This produced different
+      results in Windows and Linux.
+
+
+2019-10-31  Luigi Scarso <luigi.scarso@gmail.com>
+    * subfont key in font table (to identify subfint in ttc) plus
+      some cleanup (HH)
+
+2019-10-28 Luigi Scarso <luigi.scarso@gmail.com>
+    * New callback lua.getcodepage()  for diagnostic purposes.
+
+
+2019-10-25 Luigi Scarso <luigi.scarso@gmail.com>
+    * Also support {oeps.foo} filenames in openin/out
+
+
+2019-10-22 Luigi Scarso <luigi.scarso@gmail.com>
+    *  *** DROPPED  "page_objnum_provider" callback , replaced with "page_order_index" ***
+
+
+2019-10-18 Luigi Scarso <luigi.scarso@gmail.com>
+	* following https://tug.org/pipermail/tlbuild/2019q3/004553.html
+          we have now define(__sparc)
+
+2019-10-13 Luigi Scarso <luigi.scarso@gmail.com>
+	* additional primitives  \eTeXglue[stretch|shrink]order for querying order the etex way (HH)
+	* extra features runtoks (HH)
+	* tex.getmodenames() (as these can differ per engine/version) (HH)
+	* permit nested runtoks in more complex situations of nesting (HH)
+	* more accurate and correct test for tex.[set|get]math
+	* minor clean-up and bugs fixed
+
+
+
+2019-08-12 Luigi Scarso <luigi.scarso@gmail.com>
+	* Support new option --cnf-line from  kapthsea.
+
+
+2019-07-27 Luigi Scarso <luigi.scarso@gmail.com>
+	* Fixed \opein, to be consistent with pdftex in opening
+	  a file without extension (but not enclosed in {})
+
+2019-07-06 Luigi Scarso <luigi.scarso@gmail.com>
+	* Integration of harfbuzz. 
+	* Splitting of exe into *hbtex variants.
+
+2019-02-19 Luigi Scarso <luigi.scarso@gmail.com>
+	* am/luatex.am ([un]install-lua[jit]tex-links) [MINGW32]:
+	different commands for mingw.
 
 2018-08-27 Luigi Scarso <luigi.scarso@gmail.com>
 	* dropped dependency from gmp and mpfr

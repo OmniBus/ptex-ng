@@ -1,8 +1,8 @@
-# $Id: configure.ac 48654 2018-09-13 17:10:25Z karl $
+dnl $Id: configure.ac 55466 2020-06-07 18:00:56Z karl $
 dnl Process this file with autoconf to produce a configure script
 dnl for dvisvgm in TeX Live.
 dnl
-dnl   Copyright 2015-2018 Karl Berry <tex-live@tug.org>
+dnl   Copyright 2015-2020 Karl Berry <tex-live@tug.org>
 dnl   Copyright 2009-2014 Peter Breitenlohner <tex-live@tug.org>
 dnl
 dnl   This file is free software; the copyright holder
@@ -10,12 +10,12 @@ dnl   gives unlimited permission to copy and/or distribute it,
 dnl   with or without modifications, as long as this notice is preserved.
 dnl
 dnl  Adapted for TeX Live from original dvisvgm configure.ac
-dnl  Copyright 2005-2018 Martin Gieseking
+dnl  Copyright 2005-2020 Martin Gieseking
 dnl
 AC_PREREQ([2.65])
 m4_include([version.ac])[] dnl define dvisvgm_version
 AC_INIT([dvisvgm (TeX Live)], dvisvgm_version, [tex-k@tug.org])
-DATE="September 2018"
+DATE="March 2020"
 AC_CONFIG_SRCDIR([dvisvgm-src/src/dvisvgm.cpp])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIRS([../../m4])dnl not just _DIR
@@ -29,8 +29,7 @@ AM_PROG_AR
 KPSE_COMMON([dvisvgm])
 
 AH_TEMPLATE([TARGET_SYSTEM], [The machine triplet of the target system])
-AC_DEFINE_UNQUOTED([TARGET_SYSTEM], ["$host"],
-                   [The machine triplet of the target system.])
+AC_DEFINE_UNQUOTED([TARGET_SYSTEM], ["$target"])
 
 AC_PROG_CC
 AC_PROG_CC_C99
@@ -63,6 +62,9 @@ have_libgs=yes
 AC_CHECK_HEADER([ghostscript/iapi.h],
 	[AC_CHECK_LIB(gs, gsapi_revision,, [have_libgs=no])],
 	[have_libgs=no])
+if test "x$have_libgs" = xyes; then
+  HAVE_LIBGS=1
+fi
 AS_IF([test "x$have_libgs" = "xno"],
 	# Ghostscript not found, check for dlopen
 	[AC_CHECK_LIB(dl, dlopen,,
@@ -162,7 +164,6 @@ AC_STRUCT_TM
 # Check for library functions.
 AC_FUNC_STAT
 AC_CHECK_FUNCS_ONCE([ftime gettimeofday sigaction umask uselocale])
-# TL? memset strcasecmp strtol
 
 AC_ARG_ENABLE([woff],
 	[AS_HELP_STRING([--disable-woff], [Disable WOFF support @<:@default=no@:>@])],
@@ -190,14 +191,32 @@ AM_CONDITIONAL([USE_BUNDLED_LIBS], [test "x$use_bundled_libs" = "xyes" dnl
 # TL: use bundled md5 too
 AM_CONDITIONAL([USE_BUNDLED_MD5], true)
 
+# TL: these conditionals for system libraries are in the Makefile.am's.
+AM_CONDITIONAL(HAVE_POTRACE, false)
+AM_CONDITIONAL(HAVE_BROTLI, false)
+AM_CONDITIONAL(HAVE_WOFF2, false)
+AM_CONDITIONAL(HAVE_XXHASH, false)
+
 # TL: not going to build_manpage (which is the default).
 # TL: not going to attempt code coverage; need to subst it away.
 AM_CONDITIONAL([CODE_COVERAGE_ENABLED], false)
 CODE_COVERAGE_RULES=
 AC_SUBST([CODE_COVERAGE_RULES])
 
+# TL: the original configure calls pkg_check_modules,
+# which calls ac_arg_var on the _cflags and _libs for various libraries,
+# which calls ac_subst. we'll just ac_subst them to get initial (empty)
+# definitions, so we can retain the += used by the original lib/defs.am.
+# (init brotli)
+AC_SUBST(BROTLI_CFLAGS)
+AC_SUBST(BROTLI_LIBS)
+# (init woff2)
+AC_SUBST(WOFF2_CFLAGS)
+AC_SUBST(WOFF2_LIBS)
+
 AC_SUBST([DVISVGM_TREE], [dvisvgm-src])
 
+AC_SUBST([dvisvgm_srcdir], ['$(top_srcdir)/dvisvgm-src'])
 AC_SUBST(DATE)
 AC_SUBST(AM_CPPFLAGS)
 AC_SUBST(AM_LDFLAGS)
@@ -214,5 +233,6 @@ AC_CONFIG_FILES([Makefile
 	dvisvgm-src/libs/xxHash/Makefile
 	dvisvgm-src/src/Makefile
 	dvisvgm-src/src/version.hpp
+	dvisvgm-src/src/optimizer/Makefile
 ])dnl TL: skipping tests/* and doc/*
 AC_OUTPUT

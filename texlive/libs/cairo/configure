@@ -4360,6 +4360,7 @@ else
 fi ;;
 esac
 
+##tldbg KPSE_BASIC: Remember cairo () as Kpse_Package (for future messages).
 
 if test "`cd $srcdir && pwd`" != "`pwd`"; then
   # Use -I$(srcdir) only when $(srcdir) != ., so that make's output
@@ -5711,7 +5712,7 @@ esac
 	esac
 
 
-echo 'dbg:_KPSE_COMPILER_VISIBILITY called.' >&5
+echo 'tldbg:KPSE_COMPILER_VISIBILITY called.' >&5
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking CFLAGS for C to hide external symbols" >&5
 $as_echo_n "checking CFLAGS for C to hide external symbols... " >&6; }
 if ${kpse_cv_visibility_cflags+:} false; then :
@@ -5994,9 +5995,9 @@ else
   build_FALSE=
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing sqrt" >&5
-$as_echo_n "checking for library containing sqrt... " >&6; }
-if ${ac_cv_search_sqrt+:} false; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing erf" >&5
+$as_echo_n "checking for library containing erf... " >&6; }
+if ${ac_cv_search_erf+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_func_search_save_LIBS=$LIBS
@@ -6009,11 +6010,11 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char sqrt ();
+char erf ();
 int
 main ()
 {
-return sqrt ();
+return erf ();
   ;
   return 0;
 }
@@ -6026,25 +6027,25 @@ for ac_lib in '' m; do
     LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
   fi
   if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_search_sqrt=$ac_res
+  ac_cv_search_erf=$ac_res
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext
-  if ${ac_cv_search_sqrt+:} false; then :
+  if ${ac_cv_search_erf+:} false; then :
   break
 fi
 done
-if ${ac_cv_search_sqrt+:} false; then :
+if ${ac_cv_search_erf+:} false; then :
 
 else
-  ac_cv_search_sqrt=no
+  ac_cv_search_erf=no
 fi
 rm conftest.$ac_ext
 LIBS=$ac_func_search_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_sqrt" >&5
-$as_echo "$ac_cv_search_sqrt" >&6; }
-ac_res=$ac_cv_search_sqrt
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_erf" >&5
+$as_echo "$ac_cv_search_erf" >&6; }
+ac_res=$ac_cv_search_erf
 if test "$ac_res" != no; then :
   test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
 
@@ -6259,12 +6260,12 @@ else
   CAIRO_HAS_RECORDING_SURFACE_FALSE=
 fi
 
-if test "x0" = x1; then
+if test "x1" = x1; then
 
 $as_echo "#define CAIRO_HAS_PDF_SURFACE 1" >>confdefs.h
 
 fi
- if test "x0" = x1; then
+ if test "x1" = x1; then
   CAIRO_HAS_PDF_SURFACE_TRUE=
   CAIRO_HAS_PDF_SURFACE_FALSE='#'
 else
@@ -6403,7 +6404,7 @@ else
 fi
 
 
-## _KPSE_INIT: Initialize TL infrastructure
+##tldbg _KPSE_INIT: Initialize TL infrastructure.
 kpse_BLD=`(cd "./../../." && pwd)`
 kpse_SRC=`(cd "$srcdir/../../." && pwd)`
 
@@ -6570,7 +6571,9 @@ else
   PKG_CONFIG="$ac_cv_prog_PKG_CONFIG"
 fi
 
-## _KPSE_LIB_FLAGS: Setup pixman (-lpixman) flags
+##tldbg _KPSE_LIB_FLAGS: Setup pixman (-lpixman) flags.
+echo 'tldbg:_KPSE_LIB_FLAGS called: libdir=pixman, libname=pixman, options=, tlincl=-IBLD/libs/pixman/include, tllib=BLD/libs/pixman/libpixman.a, tlextra=, rebuildsrcdeps=, rebuildblddeps=${top_builddir}/../../libs/pixman/include/pixman.h.' >&5
+##tldbg _KPSE_LIB_FLAGS_TL: pixman (pixman) .
 
 # Check whether --with-system-pixman was given.
 if test "${with_system_pixman+set}" = set; then :
@@ -8151,7 +8154,9 @@ $as_echo X/"$am_mf" |
     { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
 as_fn_error $? "Something went wrong bootstrapping makefile fragments
-    for automatic dependency tracking.  Try re-running configure with the
+    for automatic dependency tracking.  If GNU make was not used, consider
+    re-running the configure script with MAKE=\"gmake\" (or whatever is
+    necessary).  You can also try re-running configure with the
     '--disable-dependency-tracking' option to at least be able to build
     the package (albeit without support for automatic dependency tracking).
 See \`config.log' for more details" "$LINENO" 5; }

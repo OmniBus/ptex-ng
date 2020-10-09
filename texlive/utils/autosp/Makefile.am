@@ -1,7 +1,7 @@
-## $Id: Makefile.am 46654 2018-02-16 22:43:14Z karl $
+## $Id: Makefile.am 55466 2020-06-07 18:00:56Z karl $
 ## Makefile.am for the TeX Live subdirectory utils/autosp/
 ##
-## Copyright 2016-2018 Karl Berry <tex-live@tug.org>
+## Copyright 2016-2020 Karl Berry <tex-live@tug.org>
 ## You may freely use, modify and/or distribute this file.
 
 ## We want to re-distribute the whole original ps2eps source tree.
@@ -13,15 +13,20 @@ NEVER_NAMES += $(NEVER_NAMES_SUB)
 
 AM_CFLAGS = $(WARNING_CFLAGS)
 
-# We intentionally omit the rebar program, since the name just seems to
-# be generic to end up in system bindirs, and it's said to just be a
+# We intentionally omit the rebar program, since the name seems too
+# generic to end up in system bindirs, and it's said to only be a
 # convenience.  People can get it from the Werner Icking Music Archive.
 bin_PROGRAMS = autosp tex2aspc
 
 # must use @... here or subdir $(... (literally) is created for .deps.
 autosp_SOURCES = \
 	@AUTOSP_TREE@/autosp.c \
-	@AUTOSP_TREE@/utils.c
+	@AUTOSP_TREE@/utils.c \
+	@AUTOSP_TREE@/process_score.c \
+	@AUTOSP_TREE@/process_command.c \
+	@AUTOSP_TREE@/status.c \
+	@AUTOSP_TREE@/spacing_note.c \
+	@AUTOSP_TREE@/xtuplet.c
 
 tex2aspc_SOURCES = \
 	@AUTOSP_TREE@/tex2aspc.c \

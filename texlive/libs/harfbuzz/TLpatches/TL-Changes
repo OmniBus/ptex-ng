@@ -1,9 +1,8 @@
-Changes applied to the harfbuzz-2.0.2/ tree as obtained from:
-	http://www.freedesktop.org/software/harfbuzz/release/
+Changes applied to the harfbuzz-2.7.2/ tree as obtained from:
+	https://github.com/harfbuzz/harfbuzz/releases/download/2.7.2/
 
 Removed:
 	COPYING
-	INSTALL
 	Makefile.in
 	aclocal.m4
 	ar-lib
@@ -12,16 +11,18 @@ Removed:
 	config.sub
 	configure
 	depcomp
+	gtk-doc.make
 	install-sh
 	ltmain.sh
 	missing
+	test-driver
 	src/Makefile.in
 	src/hb-version.h
-	test-driver
-
-Removed unused dirs:
+        unused dirs:
 	docs
 	m4
+	meson-cc-tests
+	perf
+	subprojects
 	test
 	util
-	src/hb-ucdn

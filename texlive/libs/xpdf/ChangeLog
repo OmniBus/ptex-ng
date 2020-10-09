@@ -1,3 +1,22 @@
+2020-05-14  Karl Berry  <karl@freefriends.org>
+
+	* ac/xpdf.ac: doc change for poppler no longer supported in TL.
+
+2019-09-29  Akira Kakuto  <kakuto@w32tex.org>
+
+	* Import xpdf-4.02.
+	* version.ac: Adjust.
+
+2019-05-03  Akira Kakuto  <kakuto@w32tex.org>
+
+	* Import xpdf-4.01.01.
+	* version.ac: Adjust.
+
+2019-02-25  Akira Kakuto  <kakuto@w32tex.org>
+
+	* Import xpdf-4.01.
+	* Makefile.am, version.ac: Adjust.
+
 2018-10-02  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
 
 	* aconf-w32.h: Added for w32.

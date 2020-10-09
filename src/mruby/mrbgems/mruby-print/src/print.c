@@ -1,6 +1,10 @@
 #include <mruby.h>
+
+#ifdef MRB_DISABLE_STDIO
+# error print conflicts 'MRB_DISABLE_STDIO' configuration in your 'build_config.rb'
+#endif
+
 #include <mruby/string.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #if defined(_WIN32)
@@ -23,7 +27,6 @@ printstr(mrb_state *mrb, mrb_value obj)
       char* utf8 = RSTRING_PTR(obj);
       int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8, mlen, NULL, 0);
       wchar_t* utf16 = (wchar_t*)mrb_malloc(mrb, (wlen+1) * sizeof(wchar_t));
-      if (utf16 == NULL) return;
       if (MultiByteToWideChar(CP_UTF8, 0, utf8, mlen, utf16, wlen) > 0) {
         utf16[wlen] = 0;
         WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE),
@@ -42,9 +45,8 @@ printstr(mrb_state *mrb, mrb_value obj)
 mrb_value
 mrb_printstr(mrb_state *mrb, mrb_value self)
 {
-  mrb_value argv;
+  mrb_value argv = mrb_get_arg1(mrb);
 
-  mrb_get_args(mrb, "o", &argv);
   printstr(mrb, argv);
 
   return argv;

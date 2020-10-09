@@ -15,6 +15,11 @@
 #include "drawlabel.h"
 #include "drawlayer.h"
 #include "drawsurface.h"
+#include "drawpath3.h"
+
+#ifdef __MSDOS__
+#include "sys/cygwin.h"
+#endif
 
 using std::ifstream;
 using std::ofstream;
@@ -248,6 +253,16 @@ bool picture::havepng()
   return false;
 }
 
+bool picture::havenewpage()
+{
+  for(nodelist::iterator p=nodes.begin(); p != nodes.end(); ++p) {
+    assert(*p);
+    if((*p)->isnewpage())
+      return true;
+  }
+  return false;
+}
+
 bbox picture::bounds()
 {
   size_t n=nodes.size();
@@ -262,10 +277,12 @@ bbox picture::bounds()
   if(havelabels()) texinit();
   
   nodelist::iterator p=nodes.begin();
+  processDataStruct& pd=processData();
+
   for(size_t i=0; i < lastnumber; ++i) ++p;
   for(; p != nodes.end(); ++p) {
     assert(*p);
-    (*p)->bounds(b_cached,processData().tex,labelbounds,bboxstack);
+    (*p)->bounds(b_cached,pd.tex,labelbounds,bboxstack);
     
     // Optimization for interpreters with fixed stack limits.
     if((*p)->endclip()) {
@@ -313,7 +330,7 @@ pair picture::ratio(double (*m)(double, double))
   bool first=true;
   pair b;
   bounds3();
-  double fuzz=sqrtFuzz*(b3.Max()-b3.Min()).length();
+  double fuzz=Fuzz*(b3.Max()-b3.Min()).length();
   matrixstack ms;
   for(nodelist::const_iterator p=nodes.begin(); p != nodes.end(); ++p) {
     assert(*p);
@@ -334,7 +351,7 @@ void texinit()
   // Output any new texpreamble commands
   if(pd.tex.isopen()) {
     if(pd.TeXpipepreamble.empty()) return;
-    texpreamble(pd.tex,pd.TeXpipepreamble,false);
+    texpreamble(pd.tex,pd.TeXpipepreamble,true);
     pd.TeXpipepreamble.clear();
     return;
   }
@@ -354,27 +371,31 @@ void texinit()
   
   mem::vector<string> cmd;
   cmd.push_back(texprogram());
+  string texfatal;
   if(context) {
     cmd.push_back("--pipe");
   } else {
     if(!dir.empty()) 
       cmd.push_back("-output-directory="+dir.substr(0,dir.length()-1));
+    string jobname="texput";
     if(getSetting<bool>("inlineimage") || getSetting<bool>("inlinetex")) {
       string name=stripDir(stripExt((outname())));
       size_t pos=name.rfind("-");
       if(pos < string::npos) {
         name=stripExt(name).substr(0,pos);
         unlink((name+".aux").c_str());
-        cmd.push_back("-jobname="+name.substr(0,pos));
+        jobname=name.substr(0,pos);
+        cmd.push_back("-jobname="+jobname);
 #ifdef __MSDOS__
         cmd.push_back("NUL"); // For MikTeX
 #endif
       }
     }
     cmd.push_back("\\scrollmode");
+    texfatal="Transcript written on "+jobname+".log.\n";
   }
   
-  pd.tex.open(cmd,"texpath",texpathmessage());
+  pd.tex.open(cmd,"texpath",texpathmessage(),Strdup(texfatal));
   pd.tex.wait("\n*");
   pd.tex << "\n";
   texdocumentclass(pd.tex,true);
@@ -440,15 +461,14 @@ bool picture::texprocess(const string& texname, const string& outname,
       if(svg) {
         cmd.push_back(getSetting<string>("dvisvgm"));
         cmd.push_back("-n");
-        cmd.push_back("--verbosity=3");
+        cmd.push_back("-v0");
         string libgs=getSetting<string>("libgs");
         if(!libgs.empty())
           cmd.push_back("--libgs="+libgs);
         push_split(cmd,getSetting<string>("dvisvgmOptions"));
         cmd.push_back("-o"+outname);
         ostringstream buf;
-        bbox B=b;
-        B.shift(bboxshift+pair(1.99*cm,1.9*cm));
+        bbox B=svgbbox(b,bboxshift);
         buf << "--bbox=" 
             << B.left << "bp " 
             << B.bottom << "bp "
@@ -485,10 +505,14 @@ bool picture::texprocess(const string& texname, const string& outname,
           cmd.push_back("-Pdownload35");
           cmd.push_back("-D600");
           cmd.push_back("-O"+String(hoffset)+"bp,"+String(voffset)+"bp");
-          cmd.push_back("-T"+String(getSetting<double>("paperwidth"))+"bp,"+
-                        String(paperHeight)+"bp");
+          bool ps=havenewpage();
+          if(ps)
+            cmd.push_back("-T"+String(getSetting<double>("paperwidth"))+"bp,"+
+                          String(paperHeight)+"bp");
+          else
+            cmd.push_back("-E");
           push_split(cmd,getSetting<string>("dvipsOptions"));
-          if(getSetting<string>("papertype") != "")
+          if(ps && getSetting<string>("papertype") != "")
             cmd.push_back("-t"+papertype);
           if(verbose <= 1) cmd.push_back("-q");
           cmd.push_back("-o"+psname);
@@ -514,7 +538,7 @@ bool picture::texprocess(const string& texname, const string& outname,
                   continue;
 
                 if(s.find("%!PS-Adobe-") == 0) {
-                  fout.header();
+                  fout.header(!ps);
                   continue;
                 }
 
@@ -581,8 +605,10 @@ int picture::epstopdf(const string& epsname, const string& pdfname)
   cmd.push_back("-dNOPAUSE");
   cmd.push_back("-dBATCH");
   cmd.push_back("-P");
-  if(safe)
+  if(safe) {
     cmd.push_back("-dSAFER");
+    cmd.push_back("-dDELAYSAFER"); // Support transparency extensions.
+  }
   cmd.push_back("-sDEVICE=pdfwrite");
   cmd.push_back("-dEPSCrop");
   cmd.push_back("-dSubsetFonts=true");
@@ -598,6 +624,11 @@ int picture::epstopdf(const string& epsname, const string& pdfname)
   cmd.push_back("-dDEVICEHEIGHTPOINTS="+String(max(b.top-b.bottom,3.0)));
   push_split(cmd,getSetting<string>("gsOptions"));
   cmd.push_back("-sOutputFile="+stripDir(pdfname));
+  if(safe) {
+    cmd.push_back("-c");
+    cmd.push_back(".setsafe");
+    cmd.push_back("-f");
+  }
   cmd.push_back(stripDir(epsname));
 
   char *oldPath=NULL;
@@ -656,7 +687,7 @@ bool picture::reloadPDF(const string& Viewer, const string& outname) const
     needReload=false;
     string texengine=getSetting<string>("tex");
     Setting("tex")=string("pdflatex");
-    haveReload=f.shipout(NULL,reloadprefix,"pdf",0.0,false,false);
+    haveReload=f.shipout(NULL,reloadprefix,"pdf",false,false);
     Setting("tex")=texengine;
   }
   if(haveReload) {
@@ -671,9 +702,65 @@ bool picture::reloadPDF(const string& Viewer, const string& outname) const
   return true;
 }               
   
-  
+int picture::epstosvg(const string& epsname, const string& outname)
+{  
+  mem::vector<string> cmd;
+  cmd.push_back(getSetting<string>("dvisvgm"));
+  cmd.push_back("-n");
+  cmd.push_back("-E");
+  cmd.push_back("--verbosity=3");
+  string libgs=getSetting<string>("libgs");
+  if(!libgs.empty())
+    cmd.push_back("--libgs="+libgs);
+  push_split(cmd,getSetting<string>("dvisvgmOptions"));
+  cmd.push_back("-o"+outname);
+  cmd.push_back(epsname);
+  int status=System(cmd,2,true,"dvisvgm");
+  if(!getSetting<bool>("keep"))
+    unlink(epsname.c_str());
+  return status;
+}
+
+int picture::pdftosvg(const string& pdfname, const string& outname)
+{  
+  mem::vector<string> cmd;
+  cmd.push_back(getSetting<string>("dvisvgm"));
+  cmd.push_back("-n");
+  cmd.push_back("--pdf");
+  cmd.push_back("--verbosity=3");
+  string libgs=getSetting<string>("libgs");
+  if(!libgs.empty())
+    cmd.push_back("--libgs="+libgs);
+  push_split(cmd,getSetting<string>("dvisvgmOptions"));
+  cmd.push_back("-o"+outname);
+  cmd.push_back(pdfname);
+  int status=System(cmd,2,true,"dvisvgm");
+  if(status == 0 && !getSetting<bool>("keep"))
+    unlink(pdfname.c_str());
+  return status;
+}
+
+void htmlView(string name)
+{
+  mem::vector<string> cmd;
+  push_command(cmd,getSetting<string>("htmlviewer"));
+#ifdef __MSDOS__
+  ssize_t size=cygwin_conv_path(CCP_POSIX_TO_WIN_A,
+                                locateFile(name,true).c_str(),NULL,0);
+  if(size <= 0) return;
+  char filename[size];
+  size=cygwin_conv_path(CCP_POSIX_TO_WIN_A,locateFile(name,true).c_str(),
+                        filename,size);
+  cmd.push_back("file://"+string(filename));
+#else        
+  cmd.push_back(locateFile(name,true));
+#endif
+  push_split(cmd,getSetting<string>("htmlviewerOptions"));
+  System(cmd,2,false);
+}
+
 bool picture::postprocess(const string& prename, const string& outname,
-                          const string& outputformat, double magnification,
+                          const string& outputformat,
                           bool wait, bool view, bool pdftex, 
                           bool epsformat, bool svg)
 {
@@ -692,21 +779,13 @@ bool picture::postprocess(const string& prename, const string& outname,
       } else status=epstopdf(prename,outname);
     } else if(epsformat) {
       if(svg) {
-        string epsname=stripExt(prename)+".eps";
-        status=pdftoeps(prename,epsname);
-        cmd.push_back(getSetting<string>("dvisvgm"));
-        cmd.push_back("-n");
-        cmd.push_back("-E");
-        cmd.push_back("--verbosity=3");
-        string libgs=getSetting<string>("libgs");
-        if(!libgs.empty())
-          cmd.push_back("--libgs="+libgs);
-        push_split(cmd,getSetting<string>("dvisvgmOptions"));
-        cmd.push_back("-o"+outname);
-        cmd.push_back(epsname);
-        status=System(cmd,0,true,"dvisvgm");
-        if(!getSetting<bool>("keep"))
-          unlink(epsname.c_str());
+        status=pdftosvg(prename,outname);
+        if(status != 0) { // Dvisvgm version < 2.4 doesn't support --pdf
+          string epsname=stripExt(prename)+".eps";
+          status=pdftoeps(prename,epsname);
+          if(status != 0) return false;
+          status=epstosvg(epsname,outname);
+        }
         epsformat=false;
       } else 
         status=pdftoeps(prename,outname);
@@ -730,7 +809,7 @@ bool picture::postprocess(const string& prename, const string& outname,
         cmd.push_back("-sOutputFile="+outname);
         cmd.push_back(prename);
         status=System(cmd,0,true,"gs","Ghostscript");
-      } else if(!svg) {
+      } else if(!svg && !getSetting<bool>("xasy")) {
         double expand=antialias;
         if(expand < 2.0) expand=1.0;
         res *= expand;
@@ -801,12 +880,16 @@ bool picture::postprocess(const string& prename, const string& outname,
         }
       }
     } else {
-      mem::vector<string> cmd;
-      push_command(cmd,getSetting<string>("display"));
-      cmd.push_back(outname);
-      string application="your "+outputformat+" viewer";
-      status=System(cmd,0,wait,"display",application.c_str());
-      if(status != 0) return false;
+      if(outputformat == "svg")
+        htmlView(outname);
+      else {
+        mem::vector<string> cmd;
+        push_command(cmd,getSetting<string>("display"));
+        cmd.push_back(outname);
+        string application="your "+outputformat+" viewer";
+        status=System(cmd,0,wait,"display",application.c_str());
+        if(status != 0) return false;
+      }
     }
   }
   
@@ -820,8 +903,7 @@ string Outname(const string& prefix, const string& outputformat,
 }
 
 bool picture::shipout(picture *preamble, const string& Prefix,
-                      const string& format, double magnification,
-                      bool wait, bool view)
+                      const string& format, bool wait, bool view)
 {
   b=bounds();
   
@@ -846,22 +928,25 @@ bool picture::shipout(picture *preamble, const string& Prefix,
     else dvi=true;
   }
   
-  bool xobject=magnification > 0;
   string outname=Outname(prefix,outputformat,standardout);
   string epsname=epsformat ? (standardout ? "" : outname) :
     auxname(prefix,"eps");
   
   bool Labels=labels || TeXmode;
   
-  if(b.empty && !Labels) { // Output a null file
+  bool empty=b.empty;
+  if(outputformat == "png" && (b.right-b.left < 1.0 || b.top-b.bottom < 1.0))
+    empty=true;
+
+  if(empty && !Labels) { // Output a null file
     bbox b;
     b.left=b.bottom=0;
-    b.right=b.top=xobject ? 18 : 1;
+    b.right=b.top=1;
     psfile out(epsname,false);
     out.prologue(b);
     out.epilogue();
     out.close();
-    return postprocess(epsname,outname,outputformat,1.0,wait,view,false,
+    return postprocess(epsname,outname,outputformat,wait,view,false,
                        epsformat,false);
   }
   
@@ -873,13 +958,6 @@ bool picture::shipout(picture *preamble, const string& Prefix,
   string prename=((epsformat && !pdf) || !Labels) ? epsname : 
     auxname(prefix,preformat);
   
-  if(xobject) {
-    double fuzz=0.5/magnification;
-    b.top += fuzz;
-    b.right += fuzz;
-    b.bottom -= fuzz;
-  }
-    
   SetPageDimensions();
   
   pair aligndir=getSetting<pair>("aligndir");
@@ -925,7 +1003,7 @@ bool picture::shipout(picture *preamble, const string& Prefix,
   
   bbox bshift=b;
   
-  transparency=false;
+//  transparency=false;
   int svgcount=0;
   
   typedef mem::list<drawElement *> clipstack;
@@ -972,6 +1050,8 @@ bool picture::shipout(picture *preamble, const string& Prefix,
     if(dvi)
       for(nodelist::const_iterator r=begin.begin(); r != begin.end(); ++r)
         (*r)->draw(&out);
+    
+    processDataStruct &pd=processData();
     
     for(; p != nodes.end(); ++p) {
       assert(*p);
@@ -1023,7 +1103,7 @@ bool picture::shipout(picture *preamble, const string& Prefix,
           buf << prefix << "_" << svgcount;
           ++svgcount;
           string pngname=buildname(buf.str(),"png");
-          f->shipout(preamble,buf.str(),"png",0.0,false,false);
+          f->shipout(preamble,buf.str(),"png",false,false);
           pair m=f->bounds().Min();
           pair M=f->bounds().Max();
           delete f;
@@ -1036,7 +1116,7 @@ bool picture::shipout(picture *preamble, const string& Prefix,
           static pair zero;
           L=new drawLabel(cmd.str(),"",identity,pair(m.getx(),M.gety()),zero,P);
           texinit();
-          L->bounds(b_cached,processData().tex,labelbounds,bboxstack);
+          L->bounds(b_cached,pd.tex,labelbounds,bboxstack);
           postscript=true;
         }
         break;
@@ -1050,8 +1130,8 @@ bool picture::shipout(picture *preamble, const string& Prefix,
     out.epilogue();
     out.close();
     
-    if(out.Transparency())
-      transparency=true;
+//    if(out.Transparency())
+//      transparency=true;
     
     if(Labels) {
       tex->resetpen();
@@ -1102,17 +1182,12 @@ bool picture::shipout(picture *preamble, const string& Prefix,
         }
       }
       if(status) {
-        if(xobject) {
-          if(pdf || transparency)
-            status=(epstopdf(prename,Outname(prefix,"pdf",standardout)) == 0);
-        } else {
-          if(context) prename=stripDir(prename);
-          status=postprocess(prename,outname,outputformat,magnification,wait,
-                             view,pdf && Labels,epsformat,svg);
-          if(pdfformat && !getSetting<bool>("keep")) {
-            unlink(auxname(prefix,"m9").c_str());
-            unlink(auxname(prefix,"pbsdat").c_str());
-          }
+        if(context) prename=stripDir(prename);
+        status=postprocess(prename,outname,outputformat,wait,
+                           view,pdf && Labels,epsformat,svg);
+        if(pdfformat && !getSetting<bool>("keep")) {
+          unlink(auxname(prefix,"m9").c_str());
+          unlink(auxname(prefix,"pbsdat").c_str());
         }
       }
     }
@@ -1124,16 +1199,17 @@ bool picture::shipout(picture *preamble, const string& Prefix,
 }
 
 // render viewport with width x height pixels.
-void picture::render(GLUnurbs *nurb, double size2,
-                     const triple& Min, const triple& Max,
-                     double perspective, bool lighton, bool transparent) const
+void picture::render(double size2, const triple& Min, const triple& Max,
+                     double perspective, bool remesh) const
 {
   for(nodelist::const_iterator p=nodes.begin(); p != nodes.end(); ++p) {
     assert(*p);
-    (*p)->render(nurb,size2,Min,Max,perspective,lighton,transparent);
+    if(remesh) (*p)->meshinit();
+    (*p)->render(size2,Min,Max,perspective,remesh);
   }
+      
 #ifdef HAVE_GL
-  drawBezierPatch::S.draw();
+  drawBuffers();
 #endif  
 }
   
@@ -1148,14 +1224,13 @@ struct Communicate : public gc {
   triple m;
   triple M;
   pair shift;
+  pair margin;
   double *t;
   double *background;
   size_t nlights;
   triple *lights;
   double *diffuse;
-  double *ambient;
   double *specular;
-  bool viewportlighting;
   bool view;
 };
 
@@ -1169,25 +1244,31 @@ void glrenderWrapper()
   endwait(initSignal,initLock);
 #endif  
   glrender(com.prefix,com.pic,com.format,com.width,com.height,com.angle,
-           com.zoom,com.m,com.M,com.shift,com.t,com.background,com.nlights,
-           com.lights,com.diffuse,com.ambient,com.specular,com.viewportlighting,
-           com.view);
+           com.zoom,com.m,com.M,com.shift,com.margin,com.t,com.background,
+           com.nlights,com.lights,com.diffuse,com.specular,com.view);
 #endif  
 }
 
 bool picture::shipout3(const string& prefix, const string& format,
                        double width, double height, double angle, double zoom,
                        const triple& m, const triple& M, const pair& shift,
-                       double *t, double *background, size_t nlights,
-                       triple *lights, double *diffuse, double *ambient,
-                       double *specular, bool viewportlighting, bool view)
+                       const pair& margin, double *t, double *background,
+                       size_t nlights, triple *lights, double *diffuse,
+                       double *specular, bool view)
 {
   if(getSetting<bool>("interrupt"))
     return true;
   
-#ifndef HAVE_LIBGLUT
-  if(!getSetting<bool>("offscreen"))
+  bool webgl=format == "html";
+  
+#ifndef HAVE_GL
+  if(!webgl && !getSetting<bool>("offscreen"))
     camp::reportError("to support onscreen rendering, please install glut library, run ./configure, and recompile");
+#endif
+  
+#ifndef HAVE_LIBGLM
+  if(webgl)
+    camp::reportError("to support WebGL rendering, please install glm header files, run ./configure, and recompile");
 #endif
   
 #ifndef HAVE_LIBOSMESA
@@ -1223,74 +1304,97 @@ bool picture::shipout3(const string& prefix, const string& format,
   const string outputformat=format.empty() ? 
     getSetting<string>("outformat") : format;
   
-#ifdef HAVE_GL  
-  bool View=settings::view() && view;
+#ifdef HAVE_LIBGLM
   static int oldpid=0;
+  bool View=settings::view() && view;
+#endif  
+  
+#ifdef HAVE_GL
   bool offscreen=getSetting<bool>("offscreen");
 #ifdef HAVE_PTHREAD
   bool animating=getSetting<bool>("animating");
   bool Wait=!interact::interactive || !View || animating;
 #endif  
-#endif  
+#endif 
 
-#if defined(HAVE_LIBGLUT) && defined(HAVE_GL)
-  if(glthread && !offscreen) {
+  if(!webgl) {
+#ifdef HAVE_GL
+    if(glthread && !offscreen) {
 #ifdef HAVE_PTHREAD
-    if(gl::initialize) {
-      gl::initialize=false;
-      com.prefix=prefix;
-      com.pic=pic;
-      com.format=outputformat;
-      com.width=width;
-      com.height=height;
-      com.angle=angle;
-      com.zoom=zoom;
-      com.m=m;
-      com.M=M;
-      com.shift=shift;
-      com.t=t;
-      com.background=background;
-      com.nlights=nlights;
-      com.lights=lights;
-      com.diffuse=diffuse;
-      com.ambient=ambient;
-      com.specular=specular;
-      com.viewportlighting=viewportlighting;
-      com.view=View;
-      if(Wait)
-        pthread_mutex_lock(&readyLock);
-      wait(initSignal,initLock);
-      endwait(initSignal,initLock);
-      static bool initialize=true;
-      if(initialize) {
+      if(gl::initialize) {
+        gl::initialize=false;
+        com.prefix=prefix;
+        com.pic=pic;
+        com.format=outputformat;
+        com.width=width;
+        com.height=height;
+        com.angle=angle;
+        com.zoom=zoom;
+        com.m=m;
+        com.M=M;
+        com.shift=shift;
+        com.margin=margin;
+        com.t=t;
+        com.background=background;
+        com.nlights=nlights;
+        com.lights=lights;
+        com.diffuse=diffuse;
+        com.specular=specular;
+        com.view=View;
+        if(Wait)
+          pthread_mutex_lock(&readyLock);
         wait(initSignal,initLock);
         endwait(initSignal,initLock);
-        initialize=false;
+        static bool initialize=true;
+        if(initialize) {
+          wait(initSignal,initLock);
+          endwait(initSignal,initLock);
+          initialize=false;
+        }
+        if(Wait) {
+          pthread_cond_wait(&readySignal,&readyLock);
+          pthread_mutex_unlock(&readyLock);
+        }
+        return true;
       }
-      if(Wait) {
-        pthread_cond_wait(&readySignal,&readyLock);
-        pthread_mutex_unlock(&readyLock);
-      }
-      return true;
-    }
-    if(Wait)
-      pthread_mutex_lock(&readyLock);
+      if(Wait)
+        pthread_mutex_lock(&readyLock);
 #endif
-  } else {
-    int pid=fork();
-    if(pid == -1)
-      camp::reportError("Cannot fork process");
-    if(pid != 0)  {
-      oldpid=pid;
-      waitpid(pid,NULL,interact::interactive && View ? WNOHANG : 0);
-      return true;
+    } else {
+      int pid=fork();
+      if(pid == -1)
+        camp::reportError("Cannot fork process");
+      if(pid != 0)  {
+        oldpid=pid;
+        waitpid(pid,NULL,interact::interactive && View ? WNOHANG : 0);
+        return true;
+      }
     }
+#endif
   }
-#endif
+  
+#if HAVE_LIBGLM  
+  glrender(prefix,pic,outputformat,width,height,angle,zoom,m,M,shift,margin,t,
+           background,nlights,lights,diffuse,specular,View,oldpid);
+  
+  if(webgl) {
+    jsfile js;
+    string name=buildname(prefix,format);
+    js.open(name);
+  
+    for(nodelist::iterator p=pic->nodes.begin(); p != pic->nodes.end(); ++p) {
+      assert(*p);
+      (*p)->write(&js);
+    }
+    if(verbose > 0)
+      cout << "Wrote " << name << endl;
+    if(View)
+      htmlView(name);
+    return true;
+  }
+#endif  
+
 #ifdef HAVE_GL  
-  glrender(prefix,pic,outputformat,width,height,angle,zoom,m,M,shift,t,
-           background,nlights,lights,diffuse,ambient,specular,viewportlighting,
-           View,oldpid);
 #ifdef HAVE_PTHREAD
   if(glthread && !offscreen && Wait) {
     pthread_cond_wait(&readySignal,&readyLock);
@@ -1299,17 +1403,17 @@ bool picture::shipout3(const string& prefix, const string& format,
   return true;
 #endif
 #endif
-
+  
   return false;
 }
 
-bool picture::shipout3(const string& prefix)
+bool picture::shipout3(const string& prefix, const string format)
 {
   bounds3();
-  bool status = true;
+  bool status;
   
-  string prcname=buildname(prefix,"prc");
-  prcfile prc(prcname);
+  string name=buildname(prefix,"prc");
+  prcfile prc(name);
   
   static const double limit=2.5*10.0/INT_MAX;
   double compressionlimit=max(length(b3.Max()),length(b3.Min()))*limit;
@@ -1320,12 +1424,11 @@ bool picture::shipout3(const string& prefix)
     (*p)->write(&prc,&billboard,compressionlimit,groups);
   }
   groups.pop_back();
-  if(status)
-    status=prc.finish();
-    
+  status=prc.finish();
+
   if(!status) reportError("shipout3 failed");
     
-  if(verbose > 0) cout << "Wrote " << prcname << endl;
+  if(verbose > 0) cout << "Wrote " << name << endl;
   
   return true;
 }

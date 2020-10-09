@@ -919,12 +919,24 @@ void Gfx::opSetFlat(Object args[], int numArgs) {
 }
 
 void Gfx::opSetLineJoin(Object args[], int numArgs) {
-  state->setLineJoin(args[0].getInt());
+  int lineJoin;
+
+  lineJoin = args[0].getInt();
+  if (lineJoin < 0 || lineJoin > 2) {
+    lineJoin = 0;
+  }
+  state->setLineJoin(lineJoin);
   out->updateLineJoin(state);
 }
 
 void Gfx::opSetLineCap(Object args[], int numArgs) {
-  state->setLineCap(args[0].getInt());
+  int lineCap;
+
+  lineCap = args[0].getInt();
+  if (lineCap < 0 || lineCap > 2) {
+    lineCap = 0;
+  }
+  state->setLineCap(lineCap);
   out->updateLineCap(state);
 }
 
@@ -947,7 +959,7 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
   GfxColor backdropColor;
   GBool haveBackdropColor;
   GfxColorSpace *blendingColorSpace;
-  GBool alpha, isolated, knockout;
+  GBool alpha, knockout;
   double opac;
   int i;
 
@@ -1041,22 +1053,37 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
 
   // fill/stroke overprint, overprint mode
   if ((haveFillOP = (obj1.dictLookup("op", &obj2)->isBool()))) {
-    state->setFillOverprint(obj2.getBool());
-    out->updateFillOverprint(state);
+    if (!state->getIgnoreColorOps()) {
+      state->setFillOverprint(obj2.getBool());
+      out->updateFillOverprint(state);
+    } else {
+      error(errSyntaxWarning, getPos(), "Ignoring overprint setting"
+	    " in uncolored Type 3 char or tiling pattern");
+    }
   }
   obj2.free();
   if (obj1.dictLookup("OP", &obj2)->isBool()) {
-    state->setStrokeOverprint(obj2.getBool());
-    out->updateStrokeOverprint(state);
-    if (!haveFillOP) {
-      state->setFillOverprint(obj2.getBool());
-      out->updateFillOverprint(state);
+    if (!state->getIgnoreColorOps()) {
+      state->setStrokeOverprint(obj2.getBool());
+      out->updateStrokeOverprint(state);
+      if (!haveFillOP) {
+	state->setFillOverprint(obj2.getBool());
+	out->updateFillOverprint(state);
+      }
+    } else {
+      error(errSyntaxWarning, getPos(), "Ignoring overprint setting"
+	    " in uncolored Type 3 char or tiling pattern");
     }
   }
   obj2.free();
   if (obj1.dictLookup("OPM", &obj2)->isInt()) {
-    state->setOverprintMode(obj2.getInt());
-    out->updateOverprintMode(state);
+    if (!state->getIgnoreColorOps()) {
+      state->setOverprintMode(obj2.getInt());
+      out->updateOverprintMode(state);
+    } else {
+      error(errSyntaxWarning, getPos(), "Ignoring overprint setting"
+	    " in uncolored Type 3 char or tiling pattern");
+    }
   }
   obj2.free();
 
@@ -1072,32 +1099,40 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
     obj2.free();
     obj1.dictLookup("TR", &obj2);
   }
-  if (obj2.isName("Default") ||
-      obj2.isName("Identity")) {
-    funcs[0] = funcs[1] = funcs[2] = funcs[3] = NULL;
-    state->setTransfer(funcs);
-    out->updateTransfer(state);
-  } else if (obj2.isArray() && obj2.arrayGetLength() == 4) {
-    for (i = 0; i < 4; ++i) {
-      obj2.arrayGet(i, &obj3);
-      funcs[i] = Function::parse(&obj3);
-      obj3.free();
-      if (!funcs[i]) {
-	break;
+  if (!obj2.isNull()) {
+    if (!state->getIgnoreColorOps()) {
+      if (obj2.isName("Default") ||
+	  obj2.isName("Identity")) {
+	funcs[0] = funcs[1] = funcs[2] = funcs[3] = NULL;
+	state->setTransfer(funcs);
+	out->updateTransfer(state);
+      } else if (obj2.isArray() && obj2.arrayGetLength() == 4) {
+	for (i = 0; i < 4; ++i) {
+	  obj2.arrayGet(i, &obj3);
+	  funcs[i] = Function::parse(&obj3, 1, 1);
+	  obj3.free();
+	  if (!funcs[i]) {
+	    break;
+	  }
+	}
+	if (i == 4) {
+	  state->setTransfer(funcs);
+	  out->updateTransfer(state);
+	}
+      } else if (obj2.isName() || obj2.isDict() || obj2.isStream()) {
+	if ((funcs[0] = Function::parse(&obj2, 1, 1))) {
+	  funcs[1] = funcs[2] = funcs[3] = NULL;
+	  state->setTransfer(funcs);
+	  out->updateTransfer(state);
+	}
+      } else {
+	error(errSyntaxError, getPos(),
+	      "Invalid transfer function in ExtGState");
       }
+    } else {
+      error(errSyntaxWarning, getPos(), "Ignoring transfer function setting"
+	    " in uncolored Type 3 char or tiling pattern");
     }
-    if (i == 4) {
-      state->setTransfer(funcs);
-      out->updateTransfer(state);
-    }
-  } else if (obj2.isName() || obj2.isDict() || obj2.isStream()) {
-    if ((funcs[0] = Function::parse(&obj2))) {
-      funcs[1] = funcs[2] = funcs[3] = NULL;
-      state->setTransfer(funcs);
-      out->updateTransfer(state);
-    }
-  } else if (!obj2.isNull()) {
-    error(errSyntaxError, getPos(), "Invalid transfer function in ExtGState");
   }
   obj2.free();
 
@@ -1106,9 +1141,14 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
     if (obj2.isName("None")) {
       out->clearSoftMask(state);
     } else if (obj2.isDict()) {
-      if (obj2.dictLookup("S", &obj3)->isName("Alpha")) {
+      obj2.dictLookup("S", &obj3);
+      if (obj3.isName("Alpha")) {
 	alpha = gTrue;
-      } else { // "Luminosity"
+      } else if (obj3.isName("Luminosity")) {
+	alpha = gFalse;
+      } else {
+	error(errSyntaxError, getPos(),
+	      "Missing S (subtype) entry in soft mask");
 	alpha = gFalse;
       }
       obj3.free();
@@ -1118,9 +1158,7 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
 	    obj3.isName("Identity")) {
 	  funcs[0] = NULL;
 	} else {
-	  funcs[0] = Function::parse(&obj3);
-	  if (funcs[0]->getInputSize() != 1 ||
-	      funcs[0]->getOutputSize() != 1) {
+	  if (!(funcs[0] = Function::parse(&obj3, 1, 1))) {
 	    error(errSyntaxError, getPos(),
 		  "Invalid transfer function in soft mask in ExtGState");
 	    delete funcs[0];
@@ -1145,14 +1183,10 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
       if (obj2.dictLookup("G", &obj3)->isStream()) {
 	if (obj3.streamGetDict()->lookup("Group", &obj4)->isDict()) {
 	  blendingColorSpace = NULL;
-	  isolated = knockout = gFalse;
+	  knockout = gFalse;
 	  if (!obj4.dictLookup("CS", &obj5)->isNull()) {
 	    blendingColorSpace = GfxColorSpace::parse(&obj5
 						      );
-	  }
-	  obj5.free();
-	  if (obj4.dictLookup("I", &obj5)->isBool()) {
-	    isolated = obj5.getBool();
 	  }
 	  obj5.free();
 	  if (obj4.dictLookup("K", &obj5)->isBool()) {
@@ -1170,8 +1204,11 @@ void Gfx::opSetExtGState(Object args[], int numArgs) {
 	    }
 	  }
 	  obj2.dictLookupNF("G", &objRef3);
+	  // it doesn't make sense for softmasks to be non-isolated,
+	  // because they're blended with a backdrop color, rather
+	  // than the original backdrop
 	  doSoftMask(&obj3, &objRef3, alpha, blendingColorSpace,
-		     isolated, knockout, funcs[0], &backdropColor);
+		     gTrue, knockout, funcs[0], &backdropColor);
 	  objRef3.free();
 	  if (funcs[0]) {
 	    delete funcs[0];
@@ -1268,6 +1305,11 @@ void Gfx::doSoftMask(Object *str, Object *strRef, GBool alpha,
 void Gfx::opSetRenderingIntent(Object args[], int numArgs) {
   GfxRenderingIntent ri;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring rendering intent setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   ri = parseRenderingIntent(args[0].getName());
   state->setRenderingIntent(ri);
   out->updateRenderingIntent(state);
@@ -1293,6 +1335,11 @@ GfxRenderingIntent Gfx::parseRenderingIntent(const char *name) {
 void Gfx::opSetFillGray(Object args[], int numArgs) {
   GfxColor color;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setFillPattern(NULL);
   state->setFillColorSpace(GfxColorSpace::create(csDeviceGray));
   out->updateFillColorSpace(state);
@@ -1304,6 +1351,11 @@ void Gfx::opSetFillGray(Object args[], int numArgs) {
 void Gfx::opSetStrokeGray(Object args[], int numArgs) {
   GfxColor color;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setStrokePattern(NULL);
   state->setStrokeColorSpace(GfxColorSpace::create(csDeviceGray));
   out->updateStrokeColorSpace(state);
@@ -1316,6 +1368,11 @@ void Gfx::opSetFillCMYKColor(Object args[], int numArgs) {
   GfxColor color;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setFillPattern(NULL);
   state->setFillColorSpace(GfxColorSpace::create(csDeviceCMYK));
   out->updateFillColorSpace(state);
@@ -1330,6 +1387,11 @@ void Gfx::opSetStrokeCMYKColor(Object args[], int numArgs) {
   GfxColor color;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setStrokePattern(NULL);
   state->setStrokeColorSpace(GfxColorSpace::create(csDeviceCMYK));
   out->updateStrokeColorSpace(state);
@@ -1344,6 +1406,11 @@ void Gfx::opSetFillRGBColor(Object args[], int numArgs) {
   GfxColor color;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setFillPattern(NULL);
   state->setFillColorSpace(GfxColorSpace::create(csDeviceRGB));
   out->updateFillColorSpace(state);
@@ -1358,6 +1425,11 @@ void Gfx::opSetStrokeRGBColor(Object args[], int numArgs) {
   GfxColor color;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setStrokePattern(NULL);
   state->setStrokeColorSpace(GfxColorSpace::create(csDeviceRGB));
   out->updateStrokeColorSpace(state);
@@ -1373,6 +1445,11 @@ void Gfx::opSetFillColorSpace(Object args[], int numArgs) {
   GfxColorSpace *colorSpace;
   GfxColor color;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color space setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setFillPattern(NULL);
   res->lookupColorSpace(args[0].getName(), &obj);
   if (obj.isNull()) {
@@ -1399,6 +1476,11 @@ void Gfx::opSetStrokeColorSpace(Object args[], int numArgs) {
   GfxColorSpace *colorSpace;
   GfxColor color;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color space setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   state->setStrokePattern(NULL);
   res->lookupColorSpace(args[0].getName(), &obj);
   if (obj.isNull()) {
@@ -1424,6 +1506,11 @@ void Gfx::opSetFillColor(Object args[], int numArgs) {
   GfxColor color;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   if (numArgs != state->getFillColorSpace()->getNComps()) {
     error(errSyntaxError, getPos(),
 	  "Incorrect number of arguments in 'sc' command");
@@ -1459,7 +1546,17 @@ void Gfx::opSetFillColorN(Object args[], int numArgs) {
   GfxPattern *pattern;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   if (state->getFillColorSpace()->getMode() == csPattern) {
+    if (numArgs == 0 || !args[numArgs-1].isName()) {
+      error(errSyntaxError, getPos(),
+	    "Invalid arguments in 'scn' command");
+      return;
+    }
     if (numArgs > 1) {
       if (!((GfxPatternColorSpace *)state->getFillColorSpace())->getUnder() ||
 	  numArgs - 1 != ((GfxPatternColorSpace *)state->getFillColorSpace())
@@ -1476,8 +1573,7 @@ void Gfx::opSetFillColorN(Object args[], int numArgs) {
       state->setFillColor(&color);
       out->updateFillColor(state);
     }
-    if (args[numArgs-1].isName() &&
-	(pattern = res->lookupPattern(args[numArgs-1].getName()
+    if ((pattern = res->lookupPattern(args[numArgs-1].getName()
 				      ))) {
       state->setFillPattern(pattern);
     }
@@ -1504,7 +1600,17 @@ void Gfx::opSetStrokeColorN(Object args[], int numArgs) {
   GfxPattern *pattern;
   int i;
 
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring color setting"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
   if (state->getStrokeColorSpace()->getMode() == csPattern) {
+    if (numArgs == 0 || !args[numArgs-1].isName()) {
+      error(errSyntaxError, getPos(),
+	    "Invalid arguments in 'SCN' command");
+      return;
+    }
     if (numArgs > 1) {
       if (!((GfxPatternColorSpace *)state->getStrokeColorSpace())
 	       ->getUnder() ||
@@ -1522,8 +1628,7 @@ void Gfx::opSetStrokeColorN(Object args[], int numArgs) {
       state->setStrokeColor(&color);
       out->updateStrokeColor(state);
     }
-    if (args[numArgs-1].isName() &&
-	(pattern = res->lookupPattern(args[numArgs-1].getName()
+    if ((pattern = res->lookupPattern(args[numArgs-1].getName()
 				      ))) {
       state->setStrokePattern(pattern);
     }
@@ -1978,6 +2083,7 @@ void Gfx::doTilingPatternFill(GfxTilingPattern *tPat,
     state->setStrokeColor(state->getFillColor());
     out->updateFillColor(state);
     out->updateStrokeColor(state);
+    state->setIgnoreColorOps(gTrue);
   } else {
     state->setFillColorSpace(GfxColorSpace::create(csDeviceGray));
     out->updateFillColorSpace(state);
@@ -2133,6 +2239,7 @@ void Gfx::doShadingPatternFill(GfxShadingPattern *sPat,
   if (stroke) {
     state->clipToStrokePath();
     out->clipToStrokePath(state);
+    state->setFillOverprint(state->getStrokeOverprint());
   } else if (!text) {
     state->clip();
     if (eoFill) {
@@ -2151,6 +2258,7 @@ void Gfx::doShadingPatternFill(GfxShadingPattern *sPat,
   det = ctm[0] * ctm[3] - ctm[1] * ctm[2];
   if (fabs(det) <= 1e-10) {
     error(errSyntaxError, getPos(), "Singular matrix in shading pattern fill");
+    restoreStateStack(savedState);
     return;
   }
   det = 1 / det;
@@ -2247,6 +2355,12 @@ void Gfx::opShFill(Object args[], int numArgs) {
   GfxShading *shading;
   GfxState *savedState;
   double xMin, yMin, xMax, yMax;
+
+  if (state->getIgnoreColorOps()) {
+    error(errSyntaxWarning, getPos(), "Ignoring shaded fill"
+	  " in uncolored Type 3 char or tiling pattern");
+    return;
+  }
 
   if (!out->needNonText()) {
     return;
@@ -3715,6 +3829,12 @@ void Gfx::doShowText(GString *s) {
   font = state->getFont();
   wMode = font->getWMode();
 
+  if (globalParams->isDroppedFont(font->getName()
+				    ? font->getName()->getCString() : "")) {
+    doIncCharCount(s);
+    return;
+  }
+
   if (out->useDrawChar()) {
     out->beginString(state, s);
   }
@@ -4021,7 +4141,7 @@ void Gfx::opXObject(Object args[], int numArgs) {
   ocState = ocSaved;
 }
 
-void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
+GBool Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
   Dict *dict, *maskDict;
   int width, height;
   int bits, maskBits;
@@ -4043,7 +4163,7 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
 
   // check for optional content
   if (!ocState && !inlineImg) {
-    return;
+    return gTrue;
   }
 
   // get info from the stream
@@ -4207,6 +4327,11 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
     if (!colorSpace) {
       goto err1;
     }
+    if (colorSpace->getMode() == csPattern) {
+      error(errSyntaxError, getPos(), "Image with a Pattern color space");
+      delete colorSpace;
+      goto err1;
+    }
     dict->lookup("Decode", &obj1);
     if (obj1.isNull()) {
       obj1.free();
@@ -4263,6 +4388,12 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
       }
       maskHeight = obj1.getInt();
       obj1.free();
+      if (maskWidth <= 0 || maskHeight <= 0) {
+	delete colorMap;
+	maskObj.free();
+	smaskObj.free();
+	goto err1;
+      }
       maskDict->lookup("BitsPerComponent", &obj1);
       if (obj1.isNull()) {
 	obj1.free();
@@ -4276,6 +4407,12 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
       }
       maskBits = obj1.getInt();
       obj1.free();
+      if (maskBits < 1 || maskBits > 16) {
+	delete colorMap;
+	maskObj.free();
+	smaskObj.free();
+	goto err1;
+      }
       maskDict->lookup("ColorSpace", &obj1);
       if (obj1.isNull()) {
 	obj1.free();
@@ -4294,7 +4431,7 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
 	delete colorMap;
 	maskObj.free();
 	smaskObj.free();
-	goto err1;
+	goto err2;
       }
       maskColorSpace = new GfxDeviceGrayColorSpace();
       obj1.free();
@@ -4399,6 +4536,12 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
       }
       maskHeight = obj1.getInt();
       obj1.free();
+      if (maskWidth <= 0 || maskHeight <= 0) {
+	delete colorMap;
+	maskObj.free();
+	smaskObj.free();
+	goto err2;
+      }
       maskDict->lookup("ImageMask", &obj1);
       if (obj1.isNull()) {
 	obj1.free();
@@ -4432,14 +4575,18 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
     }
 
     // if drawing is disabled, skip over inline image data
-    if (!ocState) {
-      str->reset();
-      n = height * ((width * colorMap->getNumPixelComps() *
-		     colorMap->getBits() + 7) / 8);
-      for (i = 0; i < n; ++i) {
-	str->getChar();
+    if (state->getIgnoreColorOps() || !ocState) {
+      if (state->getIgnoreColorOps()) {
+	error(errSyntaxWarning, getPos(), "Ignoring image"
+	      " in uncolored Type 3 char or tiling pattern");
       }
-      str->close();
+      if (inlineImg) {
+	str->reset();
+	n = height * ((width * colorMap->getNumPixelComps() *
+		       colorMap->getBits() + 7) / 8);
+	str->discardChars(n);
+	str->close();
+      }
 
     // draw it
     } else {
@@ -4476,7 +4623,7 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
   }
   opCounter += i;
 
-  return;
+  return gTrue;
 
  err2:
   obj1.free();
@@ -4488,6 +4635,8 @@ void Gfx::doImage(Object *ref, Stream *str, GBool inlineImg) {
     state->setRenderingIntent(riSaved);
     out->updateRenderingIntent(state);
   }
+
+  return gFalse;
 }
 
 void Gfx::doForm(Object *strRef, Object *str) {
@@ -4720,11 +4869,12 @@ void Gfx::opBeginImage(Object args[], int numArgs) {
 
   // display the image
   if (str) {
-    doImage(NULL, str, gTrue);
+    if (!doImage(NULL, str, gTrue)) {
+      delete str;
   
     // if we have the stream length, skip to end-of-stream and then
     // skip 'EI' in the original stream
-    if (haveLength) {
+    } else if (haveLength) {
       while ((c1 = str->getChar()) != EOF) ;
       delete str;
       str = parser->getStream();
@@ -4829,6 +4979,7 @@ void Gfx::opSetCharWidth(Object args[], int numArgs) {
 }
 
 void Gfx::opSetCacheDevice(Object args[], int numArgs) {
+  state->setIgnoreColorOps(gTrue);
   out->type3D1(state, args[0].getNum(), args[1].getNum(),
 	       args[2].getNum(), args[3].getNum(),
 	       args[4].getNum(), args[5].getNum());

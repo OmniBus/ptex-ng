@@ -1,6 +1,6 @@
 /* This is dvipdfmx, an eXtended version of dvipdfm by Mark A. Wicks.
 
-    Copyright (C) 2002-2018 by Jin-Hwan Cho and Shunsaku Hirata,
+    Copyright (C) 2002-2020 by Jin-Hwan Cho and Shunsaku Hirata,
     the dvipdfmx project team.
 
     This program is free software; you can redistribute it and/or modify
@@ -240,13 +240,14 @@ write_map (mapDef *mtab, int count,
 
 /* duplicated from pdfobj.c */
 static void
-write_string (char **outptr, char *endptr, const char *string)
+write_string (char **outptr, char *endptr, const char *string_data)
 {
-  char *s, *p;
-  int i, length;
+  char       *p;
+  const char *s;
+  int         i, length;
 
-  s      = (char *) string;
-  length = string ? strlen(string) : 0;
+  s      = string_data;
+  length = string_data ? strlen(string_data) : 0;
   p      = *outptr;
 
   *p++ = '(';
@@ -274,13 +275,14 @@ write_string (char **outptr, char *endptr, const char *string)
 }
 
 static void
-write_name (char **outptr, char *endptr, const char *name)
+write_name (char **outptr, char *endptr, const char *name_data)
 {
-  char *s, *p;
-  int i, length;
+  char       *p;
+  const char *s;
+  int         i, length;
 
-  s      = (char *) name;
-  length = name ? strlen(name) : 0;
+  s      = name_data;
+  length = name_data ? strlen(name_data) : 0;
   p      = *outptr;
 #ifndef is_delim
   /* Avoid '{' and '}' for PostScript compatibility? */

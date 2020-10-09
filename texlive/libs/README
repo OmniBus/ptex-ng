@@ -1,4 +1,4 @@
-$Id: README 48962 2018-10-21 02:20:17Z kakuto $
+$Id: README 56205 2020-08-29 01:14:01Z kakuto $
 Public domain.  Originally created by Karl Berry, 2005.
 
 Libraries we compile for TeX Live.
@@ -12,54 +12,53 @@ See also comments in ../texk/README.
 cairo 1.16.0 - checked 20oct18
   http://cairographics.org/releases/
 
-freetype2 2.9.1 - checked 04may18
+freetype2 2.10.2 - checked 10may20
   http://savannah.nongnu.org/download/freetype/
 
-gd 2.2.5 - checked 30aug17
+gd 2.3.0 - checked 10apr20
   https://github.com/libgd/libgd/releases
 
-gmp 6.1.2 - checked 16dec16
+gmp 6.2.0 - checked 20jan20
   http://ftp.gnu.org/gnu/gmp/
 
-graphite2 1.3.12 - checked 16aug18
+graphite2 1.3.14 - checked 10apr20
   http://sourceforge.net/projects/silgraphite/files/graphite2/
   (requires C++11)
 
-harfbuzz 2.0.2 - checked 21oct18
-  http://www.freedesktop.org/software/harfbuzz/release/
+harfbuzz 2.7.2 - checked 29aug20
+  https://github.com/harfbuzz/harfbuzz/releases/download/2.7.2/
 
-icu 61.1 - checked 29mar18
+icu 63.1 - checked 8jan19
   http://download.icu-project.org/files/icu4c/
 
 libpaper 1.1.24+nmu2 - checked 24oct13
   ftp://ftp.de.debian.org/debian/pool/main/libp/libpaper/
 
-libpng 1.6.35 - checked 17jul18
+libpng 1.6.37 - checked 03may19
   https://sourceforge.net/projects/libpng/files/ - used by many
 
-lua 5.2.3 - checked 11mar15
+lua 5.2.4 - checked 11mar15
   http://www.lua.org/ftp/
 
-luajit 2.1.0-beta2 - checked 09mar16
-  http://luajit.org/download/LuaJIT-2.1.0-beta1.tar.gz
+lua 5.3.5 - checked 21jul18
+  http://www.lua.org/ftp/
 
-mpfr 4.0.1 - checked 10feb18
+luajit 2.1.0-beta3 - checked 20jun17
+  http://luajit.org/download/LuaJIT-2.1.0-beta3.tar.gz
+
+mpfr 4.1.0 - checked 12jul20
   http://ftp.gnu.org/gnu/mpfr/
 
-pixman 0.34.0 - checked 04feb16
+pixman 0.40.0 - checked 21apr20
   http://cairographics.org/releases/
 
-poppler 0.68.0 - checked 20aug18
-  http://poppler.freedesktop.org/ - used by luatex and xetex
-  (requires C++11)
+pplib 2.05.0 - checked 21apr20
+  https://github.com/contextgarden/pplib
 
-potrace 1.15 - checked 07aug17
-  http://potrace.sourceforge.net
+teckit 2.5.10 - checked 06may20
+  https://github.com/silnrsi/teckit/archive/2.5.10.tar.gz
 
-teckit 2.5.8 - checked 24jul18
-  https://github.com/silnrsi/teckit/archive/2.5.8.tar.gz
-
-xpdf 4.00 - checked 13aug17
+xpdf 4.02 - checked 29sep19
   http://www.xpdfreader.com/download.html
   with modifications for pdftex
 

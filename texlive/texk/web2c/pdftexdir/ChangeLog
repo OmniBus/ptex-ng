@@ -1,3 +1,237 @@
+2020-08-31  Marcel Fabian Krueger  <tex@2krueger.de>
+
+	* pdftex.web (Scan the argument for command |c|) <expanded_code>:
+	free_avail(def_ref) to avoid memory exhaustion with many \expanded.
+
+2020-08-04  Andreas Scherer  <https://ascherer.github.io>
+
+	* pdftex.web: Pick a few obvious nits.
+
+2020-08-03  Andreas Scherer  <https://ascherer.github.io>
+
+	* pdftex.ch: Move pdfTeX variants of MLTeX code next to originals.
+
+2020-07-22  Akira Kakuto  <kakuto@w32tex.org>
+
+	* pdftex.web, writeimg.c: Show unfound file names in
+	fatal error messages.
+	https://tug.org/pipermail/pdftex/2020-July/009203.html
+
+2020-07-20  Andreas Scherer  <https://ascherer.github.io>
+
+	* pdftex.ch: Avoid overful hboxes in table-of-contents.
+
+2020-07-19  Karl Berry  <karl@freefriends.org>
+
+	* char-warning-pdftex.ch: new file to implement new feature;
+	if \tracinglostchars>=3, missing characters cause an error and not
+	just a diagnostic message. Also, always report the hex code of the
+	missing character. From David Jones, tex-implements 30jun2020.
+	* am/pdftex.am (pdftex_ch_srcs): add it.
+	* change-files.txt: update.
+
+2020-07-17  Andreas Scherer  <https://ascherer.github.io>
+
+	* am/pdftex.am: Avoid changefile ambiguity.
+
+2020-06-11  Thanh Han The  <hanthethanh@gmail.com>
+
+	* pdftex.web (Create link annotations...): check for gen_running_link.
+	(pdf_running_link_{off,on}_node): new @d for new primitives.
+	(Put each ...): define them.
+	(Cases of |print_cmd_chr|...): print them.
+	(Declare act...): switch on them.
+	(Implement \.{\\pdfrunninglinkoff}, ...on): new modules to
+	implement them.
+	(Display the whatsit...),
+	(Mark a partial copy...),
+	(Wipe out the whatsit...): handle them as whatsits.
+	(gen_running_link): new global, define and initialize.
+	(Output the whatsit...): set gen_running_link according
+	to the new primitives.
+	pdftex r835. Following suggestion from Ulrike Fischer,
+	https://tug.org/pipermail/tex-live/2018-November/042759.html.
+
+2020-06-10  Thanh Han The  <hanthethanh@gmail.com>
+
+	* pdftex.web (end_link): warn instead of fatal for
+	"\pdfendlink ended up in different nesting level than \pdfstartlink".
+	pdftex r832. Suggestion from Ulrike Fischer,
+	https://tug.org/pipermail/tex-live/2018-November/042759.html.
+
+2020-06-03  Thanh Han The  <hanthethanh@gmail.com>
+
+	* pdftex.web: Initialize save_tail to avoid a value of 0 given at
+	compile time. Remove unnecessary codes. (from Hironobu
+	Yamashita). pdftex r829.
+	https://mailman.ntg.nl/pipermail/ntg-pdftex/2020-May/004330.html
+
+2020-06-02  Thanh Han The  <hanthethanh@gmail.com>
+
+	* pdftex.web (auto_kern): @d=3, rather than "explicit".
+	(Display kern |p|): report auto_kern message; avoid link(r)
+	when r=null. pdftex r828. Report from Robert Schlict,
+	https://mailman.ntg.nl/pipermail/ntg-pdftex/2020-May/004317.html
+
+2020-05-31  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* writepng.c: Suppress a compiler warning: '&&' within '||'
+
+2020-05-15  Akira Kakuto  <kakuto@w32tex.org>
+
+	* pdftoepdf.cc, pdftosrc.cc, NEWS: remove support of poppler.
+
+2020-05-14  Karl Berry  <karl@freefriends.org>
+
+	* pdftoepdf-poppler0.68.0.cc,
+	* pdftoepdf-poppler0.69.0.cc,
+	* pdftoepdf-poppler0.70.0.cc,
+	* pdftoepdf-poppler0.71.0.cc,
+	* pdftoepdf-poppler0.72.0.cc,
+	* pdftoepdf-poppler0.75.0.cc,
+	* pdftoepdf-poppler0.76.0.cc,
+	* pdftoepdf-poppler0.83.0.cc,
+	* pdftoepdf-poppler0.86.0.cc,
+	* pdftosrc-newpoppler.cc,
+	* pdftosrc-poppler0.71.0.cc,
+	* pdftosrc-poppler0.72.0.cc,
+	* pdftosrc-poppler0.76.0.cc,
+	* pdftosrc-poppler0.83.0.cc: remove these interim stabs at poppler
+	support; now poppler is not supported in TL.
+	See source/m4/kpse-xpdf-flags.m4 for some discussion.
+
+2020-03-28  Thanh Han The  <hanthethanh@gmail.com>
+
+	* pdftex.web (load_expand_font, vf_def_font): do not call
+	copy_expand_params on null_font. pdftex r823.
+	Original report from Robert Schlicht,
+	https://tug.org/pipermail/tex-live/2020-March/045099.html
+	https://mailman.ntg.nl/pipermail/ntg-pdftex/2020-March/004307.html
+
+2020-03-27  Karl Berry  <karl@tug.org>
+
+	* TeX Live 2020, pdftex 1.40.21.
+
+2020-02-29  Akira Kakuto  <kakuto@w32tex.org>
+
+	Add pdftoepdf-poppler0.86.0.cc to support system poppler 0.86.0.
+
+2019-12-30  Akira Kakuto  <kakuto@w32tex.org>
+
+	* utils.c: Not include poppler-config.h, by assuming that
+	POPPLER_VERSION is defined properly.
+
+2019-12-10  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* am/pdftex.am (pdftex_ch_srcs): add zlib-fmt.ch.
+
+2019-11-25  Joseph Wright  <joseph.wright@morningstar2.co.uk>
+
+	* pdftex.web: New primitive \pdfmajorversion.
+	(pdf_major_version_code, pdf_major_version, print_param,
+         <Put each...>): housekeeping.
+	(<Initialize table entries...>): default 1.
+	(<Glob...>): fixed_pdf_major_version.
+	(pdf_version_written, <Set init...>): rename from
+	pdf_minor_version_written.
+	(check_pdfversion): rename from check_pdfminorversion,
+	and also check pdf_major_version for sanity, and set the fixed_ value,
+	and use pdf_major_version in the %PDF- line.
+	(pdf_begin_obj, pdf_begin_dict, <Initialize variables ...>,
+	 <Implement \.{\\pdfximage}>): change call to check_pdfversion. 
+	<Undump pdftex data>: undump pdf_major_version.
+	(scan_image): include pdf_major_version in call to read_image.
+	* pdftoepdf.cc (read_pdf_info): new arg major_pdf_version_wanted,
+	and check it when including PDF.
+	* ptexlib.h (readimage, undumpimagemeta): new integer args in decl.
+	* writeimg.c (readimage, undumpimagemeta): new arg
+	pdfmajorversion, and check it.
+	* writepng.c (read_png_info): check fixedpdfmajorversion
+	along with fixedpdfminorversion for various png color attributes.
+
+2019-08-06  Karl Berry  <karl@freefriends.org>
+
+	* tests/cnfline.test,
+	* tests/cnfline.tex: new files.
+	* am/pdftex.am (pdftex_tests): add pdftexdir/tests/cnfline.test.
+	(cnfline.log): depend on pdftex$(EXEEXT).
+
+2019-05-08  Akira Kakuto  <kakuto@w32tex.org>
+
+	* writeimg.c: Use a new function find_input_file() to find
+	an image file.
+	A report in tex-k list:
+	https://tug.org/pipermail/tex-k/2019-May/003014.html
+
+2019-05-03  Akira Kakuto  <kakuto@w32tex.org>
+
+	* pdftosrc-poppler0.76.0.cc, pdftoepdf-poppler0.76.0.cc:
+	Added to support system poppler 0.76.[01].
+
+2019-04-07  Karl Berry  <karl@freefriends.org>
+
+	* TeX Live 2019.
+
+2019-03-30  Akira Kakuto  <kakuto@w32tex.org>
+
+	* epdf.c: Allow spaces in CharSet.
+	Reported by Robert:
+	https://tug.org/pipermail/pdftex/2019-March/009146.html
+
+2019-03-21  Akira Kakuto  <kakuto@w32tex.org>
+
+	* pdftoepdf-poppler0.75.0.cc: Support poppler-0.75.0.
+
+2019-01-27  Karl Berry  <karl@gnu.org>
+
+	* pdftex.web (pdf_omit_charset_code, pdf_omit_charset
+	print_param,
+	<Put each...>,
+	get_pdf_omit_charset)
+	* writefont.c (write_fontdescriptor): reverse sense and name
+	to \pdfomitcharset.
+
+2019-01-27  Karl Berry  <karl@gnu.org>
+
+	* pdftex.web (pdf_include_charset_code, pdf_include_charset):
+	new primitive parameter \pdfincludecharset.
+	(print_param): print_esc it.
+	(Put each...): insert in hash table.
+	(get_pdf_include_charset): new fn to get its value.
+	* writefont.c (write_fontdescriptor): check it before outputting
+	CharSet.
+
+2019-01-19  Karl Berry  <karl@tug.org>
+
+        * NEWS,
+        * pdftex_version.h,
+        * pdftex.web (pdftex_revision, pdftex_version_string):
+        version [1.40.]20 for TL19.
+
+2019-01-08  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
+
+	* pdftosrc-poppler0.72.0.cc: Support poppler-0.73.0.
+
+2019-01-07  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* tounicode.c (deftounicode): suppress a compiler warning:
+	format specifies type 'unsigned int' but the argument has
+	type 'long' [-Wformat]
+	* writet3.c (writet3): suppress a compiler warning:
+	add explicit braces to avoid dangling else [-Wdangling-else]
+
+2018-12-07  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
+
+	* pdftosrc-poppler0.72.0.cc, pdftoepdf-poppler0.72.0.cc:
+	Add to support system poppler-0.72.0.
+	* NEWS: Change comments on system poppler.
+
+2018-11-01  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
+
+	* pdftosrc-poppler0.71.0.cc, pdftoepdf-poppler0.71.0.cc:
+	Add to support system poppler-0.71.0.
+	* NEWS: Change comments on system poppler.
+
 2018-10-24  Karl Berry  <karl@tug.org>
 
 	* writet1.c (t1_check_unusual_charstring): don't call
@@ -219,9 +453,9 @@
 	pdftosrc-newpoppler.cc, respectively, in order to use these
 	files.
 	The current pdftoepdf.cc and pdftosrc.cc support
-	xpdf-4.00 by default, xpdf-3.04 if XPDF304 is defined, and
-	poppler 0.57.0 or older versions if POPPLER_VERSION is
-	defined.
+	xpdf-4.00 or newer by default, xpdf-3.04 if XPDF304 is
+	defined, and poppler 0.57.0 or older versions if
+	POPPLER_VERSION is defined.
 
 2017-10-10  Shreevatsa R <shreevatsa.public@gmail.com>
 
@@ -464,7 +698,7 @@
 	* pdftex.web (pdf_suppress_warning_page_group): new primitive
 	parameter \pdfsuppresswarningpagegroup.
 	(get_pdf_suppress_warning_page_group): new fn to get its value.
-	* pdftopdf.cc (write_epdf): check it before issuing warning.
+	* pdftoepdf.cc (write_epdf): check it before issuing warning.
 
 2014-01-20  Peter Breitenlohner  <peb@mppmu.mpg.de>
 

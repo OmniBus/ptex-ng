@@ -2,7 +2,7 @@
 ** FilePathTest.cpp                                                     **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -28,6 +28,15 @@
 #endif
 
 using namespace std;
+
+
+TEST(FilePathTest, empty) {
+	FilePath path;
+	ASSERT_TRUE(path.empty());
+	path.set("/a/b/c/d", false, "/");
+	ASSERT_FALSE(path.empty());
+	ASSERT_EQ(path.absolute(), "/a/b/c/d");
+}
 
 
 TEST(FilePathTest, dir1) {
@@ -68,6 +77,9 @@ TEST(FilePathTest, file1) {
 	fp.suffix("new");
 	ASSERT_EQ(fp.suffix(), "new");
 	ASSERT_EQ(fp.relative("/a/b/x/y"), "../../c/d/f.new");
+	fp.suffix("");
+	ASSERT_EQ(fp.suffix(), "");
+	ASSERT_EQ(fp.relative("/a/b/x/y"), "../../c/d/f");
 }
 
 
@@ -91,4 +103,3 @@ TEST(FilePathTest, autodetect) {
 	ASSERT_FALSE(fp2.empty());
 	ASSERT_EQ(fp2.absolute(), FileSystem::getcwd());
 }
-

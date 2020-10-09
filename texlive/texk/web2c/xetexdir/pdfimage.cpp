@@ -1,7 +1,7 @@
 /****************************************************************************\
  Part of the XeTeX typesetting system
  Copyright (c) 1994-2008 by SIL International
- Copyright (c) 2009, 2017 by Jonathan Kew
+ Copyright (c) 2009-2018 by Jonathan Kew
 
  SIL Author(s): Jonathan Kew
 
@@ -36,9 +36,13 @@ authorization from the copyright holders.
 
 #include "pdfimage.h"
 
-#include "PDFDoc.h"
-#include "Catalog.h"
-#include "Page.h"
+/* 
+ * From TeX Live 2021, we use pplib by Pawe\l Jackowski instead of
+ * libpoppler
+ */
+extern "C" {
+#include "ppapi.h"
+}
 
 #include "XeTeX_ext.h"
 
@@ -53,22 +57,14 @@ int
 pdf_get_rect(char* filename, int page_num, int pdf_box, realrect* box)
 	/* return the box converted to TeX points */
 {
-	GooString*	name = new GooString(filename);
-	PDFDoc*		doc = new PDFDoc(name);
+	ppdoc*	doc = ppdoc_load(filename);
 
 	if (!doc) {
-		delete name;
 		return -1;
 	}
 
-	/* if the doc got created, it now owns name, so we mustn't delete it! */
+	int	pages = ppdoc_page_count(doc);
 
-	if (!doc->isOk()) {
-		delete doc;
-		return -1;
-	}
-
-	int			pages = doc->getNumPages();
 	if (page_num > pages)
 		page_num = pages;
 	if (page_num < 0)
@@ -76,56 +72,74 @@ pdf_get_rect(char* filename, int page_num, int pdf_box, realrect* box)
 	if (page_num < 1)
 		page_num = 1;
 
-	Page*		page = doc->getCatalog()->getPage(page_num);
+	ppref*	page = ppdoc_page(doc, page_num);
+	ppdict*	pdict = page->object.dict;
 
-	PDFRectangle*	r;
+	pprect	Rect;
+	pprect*	r;
+
 	switch (pdf_box) {
 		default:
 		case pdfbox_crop:
-			r = (PDFRectangle *)page->getCropBox();
+			r = ppdict_get_box(pdict, "CropBox", &Rect);
 			break;
 		case pdfbox_media:
-			r = (PDFRectangle *)page->getMediaBox();
+			r = ppdict_get_box(pdict, "MediaBox", &Rect);
 			break;
 		case pdfbox_bleed:
-			r = (PDFRectangle *)page->getBleedBox();
+			r = ppdict_get_box(pdict, "BleedBox", &Rect);
 			break;
 		case pdfbox_trim:
-			r = (PDFRectangle *)page->getTrimBox();
+			r = ppdict_get_box(pdict, "TrimBox", &Rect);
 			break;
 		case pdfbox_art:
-			r = (PDFRectangle *)page->getArtBox();
+			r = ppdict_get_box(pdict, "ArtBox", &Rect);
 			break;
 	}
 
-	int RotAngle = 0;
-	RotAngle = (int)page->getRotate() % 360;
+/*
+ *  In pplib, r can be NULL. If r == NULL, we try "CropBox",
+ *  "MediaBox",  "BleedBox", "TrimBox", "ArtBox" in this order.
+ */
+	if (!r) {
+		r = ppdict_get_box(pdict, "CropBox", &Rect);
+	}
+	if (!r) {
+		r = ppdict_get_box(pdict, "MediaBox", &Rect);
+	}
+	if (!r) {
+		r = ppdict_get_box(pdict, "BleedBox", &Rect);
+	}
+	if (!r) {
+		r = ppdict_get_box(pdict, "TrimBox", &Rect);
+	}
+	if (!r) {
+		r = ppdict_get_box(pdict, "ArtBox", &Rect);
+	}
+
+/*
+ * If r == NULL, return error.
+ */
+	if (!r) {
+		return -1;
+	}
+
+	ppint RotAngle = 0;
+	(void)ppdict_get_int(pdict, "Rotate", &RotAngle);
+	RotAngle = RotAngle % 360;
 	if (RotAngle < 0)
 		RotAngle += 360;
 	if (RotAngle == 90 || RotAngle == 270) {
-		double tmpvalue;
-		if (r->x1 > r->x2) {
-			tmpvalue = r->x1;
-			r->x1 = r->x2;
-			r->x2 = tmpvalue;
-		}
-		if (r->y1 > r->y2) {
-			tmpvalue = r->y1;
-			r->y1 = r->y2;
-			r->y2 = tmpvalue;
-		}
-
-		tmpvalue = r->x2;
-		r->x2 = r->x1 + r->y2 - r->y1;
-		r->y2 = r->y1 + tmpvalue - r->x1;
+		box->wd = 72.27 / 72 * fabs(r->ry - r->ly);
+		box->ht = 72.27 / 72 * fabs(r->rx - r->lx);
+	} else {
+		box->wd = 72.27 / 72 * fabs(r->rx - r->lx);
+		box->ht = 72.27 / 72 * fabs(r->ry - r->ly);
 	}
+	box->x  = 72.27 / 72 * my_fmin(r->lx, r->rx);
+	box->y  = 72.27 / 72 * my_fmin(r->ly, r->ry);
 
-	box->x  = 72.27 / 72 * my_fmin(r->x1, r->x2);
-	box->y  = 72.27 / 72 * my_fmin(r->y1, r->y2);
-	box->wd = 72.27 / 72 * fabs(r->x2 - r->x1);
-	box->ht = 72.27 / 72 * fabs(r->y2 - r->y1);
-
-	delete doc;
+	ppdoc_free(doc);
 
 	return 0;
 }
@@ -133,21 +147,15 @@ pdf_get_rect(char* filename, int page_num, int pdf_box, realrect* box)
 int
 pdf_count_pages(char* filename)
 {
-	int			pages = 0;
-	GooString*	name = new GooString(filename);
-	PDFDoc*		doc = new PDFDoc(name);
+	int	pages = 0;
+	ppdoc*	doc = ppdoc_load(filename);
 
 	if (!doc) {
-		delete name;
 		return 0;
 	}
 
-	/* if the doc got created, it now owns name, so we mustn't delete it! */
-
-	if (doc->isOk())
-		pages = doc->getNumPages();
-
-	delete doc;
+	pages = ppdoc_page_count(doc);
+	if (doc) ppdoc_free(doc);
 
 	return pages;
 }

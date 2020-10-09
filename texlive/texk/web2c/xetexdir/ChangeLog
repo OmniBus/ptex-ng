@@ -1,6 +1,127 @@
+2020-08-31  Marcel Fabian Krueger  <tex@2krueger.de>
+
+	* xetex.web (Scan the argument for command |c|) <expanded_code>:
+	free_avail(def_ref) to avoid memory exhaustion with many \expanded.
+
+2020-08-19  Andreas Scherer  <https://ascherer.github.io>
+
+	* xetex.web: Fix math operator in Pascal comment.
+
+2020-07-20  Andreas Scherer  <https://ascherer.github.io>
+
+	* char-warning-xetex.ch: WEBify variable in comment.
+	* xetex.ch: Place Web2c changes together.
+
+2020-07-19  Karl Berry  <karl@freefriends.org>
+
+	* char-warning-xetex.ch: new file; see ../pdftexdir/ChangeLog.
+	Also define new procedure print_ucs_code to print U+nnnn
+	for system fonts.
+	* am/xetex.am: add it.
+
+2020-07-17  Andreas Scherer  <https://ascherer.github.io>
+
+	* am/xetex.am: Avoid changefile ambiguity.
+
+2020-07-04  Clerk Ma  <maqiyuan130324@vip.qq.com>
+
+	* xetex.web: Tweak indentation, etc.
+
+2020-07-03  Andreas Scherer  <https://ascherer.github.io>
+
+	* xetex.web: Fix |code| snippets in {comments}.
+
+2020-07-03  David Jones  <dmj@ams.org>
+
+	* XeTeXOTMath.cpp: New implementation of get_ot_math_kern().
+	https://sourceforge.net/p/xetex/bugs/175/
+
+	* xetex.web: Fix bugs in
+	@<Attach subscript OpenType math kerning@> 
+	@<Attach superscript OpenType math kerning@>
+	(https://sourceforge.net/p/xetex/bugs/173/
+
+2020-05-04  Andreas Scherer  <https://ascherer.github.io>
+
+	* xetex.ch,
+	* xetex.web: Restore section numbering from xetex.web.
+	XeTeX can format itself, both stand-alone and as TL variant
+	(only \beginR and \endR are problematic).
+
+2020-04-26  Karl Berry  <karl@freefriends.org>
+
+	* am/xetex.am (xetex_cppflags, xetex_ldadd, xetex_dependencies):
+	use pplib instead of poppler.
+
+2020-04-26  Akira Kakuto  <kakuto@w32tex.org>
+
+	* XeTeX_ext.c,
+	* pdfimage.cpp: use pplib instead of poppler.
+
+2020-03-27  Karl Berry  <karl@tug.org>
+
+	* TeX Live 2020.
+
+2020-02-25  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* xetex.web: Allow fetching value from a token defined by
+	\Umathchardef, to be compatible with LuaTeX. Fixes #109.
+
+2020-02-23  Clerk Ma  <maqiyuan130324@vip.qq.com>
+
+	* xetex.web: Fix a potential bug in the primitive
+	\XeTeXinterchartoks.
+
+2020-02-22  Clerk Ma  <maqiyuan130324@vip.qq.com>
+
+	* xetex.web: Fix a bug in the primitive \pdfsavepos.
+
+2020-02-10  Akira Kakuto  <kakuto@w32tex.org>
+
+	* xetex.ch: Sync with tex.ch for changes by Phelype Oleinik
+	to support \input {...}.
+
+2019-12-31  Akira Kakuto  <kakuto@w32tex.org>
+
+	* XeTeX_ext.c: Support system poppler version 0.84.0.
+
+2019-12-10  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* xetex.defines (gzFile): move to ../web2c/common.defines.
+
+2019-06-30  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* xetex-filedump.test, filedump.tex, filedump.log: New tests.
+	* am/xetex.am: Adjusted for new test.
+
+2019-05-30  Khaled Hosny  <dr.khaled.hosny@gmail.com>
+
+	* XeTeXLayoutInterface.cpp: Do not use hb-icu if HarfBuzz
+	version is 2.5.0 or newer.
+
+2019-01-03  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
+
+	* NEWS, xetex_version.h, xetex.web: Sync with the upstream.
+	XeTeX version is 0.999991.
+
+2018-12-25  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
+
+	* pdfimage.cpp: Simplify the support of Rotate.
+
+2018-12-24  Stefan Br\"uns  <stefan.bruens@rwth-aachen.de>
+
+	* pdfimage.cpp: Avoid modification of internal poppler object,
+	fix compilation with poppler 0.70.0 and newer ones.
+	Improve the change on 2018-10-22.
+
+2018-11-17  Joseph Wright  <joseph.wright@morningstar2.co.uk>
+
+	* xetex.web, xetex.defines: Support some primitives from
+	pdfTeX in XeTeX. Add \expanded and extend \Uchar a bit.
+
 2018-10-22  Akira Kakuto  <kakuto@fuk.kindai.ac.jp>
 
-	* pdfimage.cpp: Cast types to support poppler 0.70.0.
+	* pdfimage.cpp: Support poppler 0.70.0.
 
 2018-09-09  Karl Berry  <karl@tug.org>
 

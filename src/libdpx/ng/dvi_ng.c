@@ -1,4 +1,4 @@
-/* Copyright 2014 Clerk Ma
+/* Copyright 2014, 2020 Clerk Ma
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -34,48 +34,22 @@ void ng_gid (uint16_t gid, int ng_font_id, int32_t h, int32_t v)
   struct loaded_font *font;
   unsigned char wbuf[2];
   spt_t width, height, depth;
-  unsigned advance;
-  double ascent, descent;
 
   font = &loaded_fonts[ng_font_id];
-  ascent = (double) font->ascent;
-  descent = (double) font->descent;
-
-  if (font->cffont)
-  {
-    cff_index * cstrings = font->cffont->cstrings;
-    t1_ginfo gm;
-
-    if (font->cffont->is_notdef_notzero)
-      gid += 1;
-
-    t1char_get_metrics(cstrings->data + cstrings->offset[gid] - 1,
-        cstrings->offset[gid + 1] - cstrings->offset[gid], 
-        font->cffont->subrs[0], &gm);
-    advance = font->layout_dir == 0 ? gm.wx : gm.wy;
-    ascent = gm.bbox.ury;
-    descent = gm.bbox.lly;
-  }
-  else
-  {
-    advance = font->hvmt[gid].advance;
-  }
-
-  width = (double) font->size * (double) advance / (double) font->unitsPerEm;
-  width = width * font->extend;
+  width = font->gm[gid].advance;
 
   if (dvi_is_tracking_boxes())
   {
     pdf_rect rect;
-    height = (double) font->size * ascent / (double) font->unitsPerEm;
-    depth  = (double) font->size * -descent / (double) font->unitsPerEm;
+    height = font->gm[gid].ascent;
+    depth  = -font->gm[gid].descent;
     pdf_dev_set_rect(&rect, h, v, width, height, depth);
     pdf_doc_expand_box(&rect);
   }
 
   wbuf[0] = gid >> 8;
   wbuf[1] = gid & 0xff;
-  pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id, -1);
+  pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id);
 }
 
 void ng_layer (uint16_t gid, int ng_font_id, int32_t h, int32_t v, uint8_t r, uint8_t g, uint8_t b)
@@ -83,12 +57,9 @@ void ng_layer (uint16_t gid, int ng_font_id, int32_t h, int32_t v, uint8_t r, ui
   struct loaded_font *font;
   unsigned char wbuf[2];
   spt_t width, height, depth;
-  unsigned advance;
-  double ascent, descent;
 
   font = &loaded_fonts[ng_font_id];
-  ascent = (double) font->ascent;
-  descent = (double) font->descent;
+  width = font->gm[gid].advance;
   {
     pdf_color color;
     pdf_color_rgbcolor(&color,
@@ -98,41 +69,18 @@ void ng_layer (uint16_t gid, int ng_font_id, int32_t h, int32_t v, uint8_t r, ui
     pdf_color_push(&color, &color);
   }
 
-  if (font->cffont)
-  {
-    cff_index * cstrings = font->cffont->cstrings;
-    t1_ginfo gm;
-
-    if (font->cffont->is_notdef_notzero)
-      gid += 1;
-
-    t1char_get_metrics(cstrings->data + cstrings->offset[gid] - 1,
-        cstrings->offset[gid + 1] - cstrings->offset[gid], 
-        font->cffont->subrs[0], &gm);
-    advance = font->layout_dir == 0 ? gm.wx : gm.wy;
-    ascent = gm.bbox.ury;
-    descent = gm.bbox.lly;
-  }
-  else
-  {
-    advance = font->hvmt[gid].advance;
-  }
-
-  width = (double) font->size * (double) advance / (double) font->unitsPerEm;
-  width = width * font->extend;
-
   if (dvi_is_tracking_boxes())
   {
     pdf_rect rect;
-    height = (double) font->size * ascent / (double) font->unitsPerEm;
-    depth  = (double) font->size * -descent / (double) font->unitsPerEm;
+    height = font->gm[gid].ascent;
+    depth  = -font->gm[gid].descent;
     pdf_dev_set_rect(&rect, h, v, width, height, depth);
     pdf_doc_expand_box(&rect);
   }
 
   wbuf[0] = gid >> 8;
   wbuf[1] = gid & 0xff;
-  pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id, -1);
+  pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id);
   {
     pdf_color_pop();
   }
@@ -157,25 +105,25 @@ void ng_set (int32_t ch, int ng_font_id, int32_t h, int32_t v)
         wbuf[1] =  UTF32toUTF16HS(ch)       & 0xff;
         wbuf[2] = (UTF32toUTF16LS(ch) >> 8) & 0xff;
         wbuf[3] =  UTF32toUTF16LS(ch)       & 0xff;
-        pdf_dev_set_string(h, v, wbuf, 4, width, font->font_id, 2);
+        pdf_dev_set_string(h, v, wbuf, 4, width, font->font_id);
       }
       else if (ch > 255)
       {
         wbuf[0] = (ch >> 8) & 0xff;
         wbuf[1] =  ch & 0xff;
-        pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id, 2);
+        pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id);
       }
       else if (font->subfont_id >= 0)
       {
         unsigned short uch = lookup_sfd_record(font->subfont_id, (unsigned char) ch);
         wbuf[0] = (uch >> 8) & 0xff;
         wbuf[1] =  uch & 0xff;
-        pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id, 2);
+        pdf_dev_set_string(h, v, wbuf, 2, width, font->font_id);
       }
       else
       {
         wbuf[0] = (unsigned char) ch;
-        pdf_dev_set_string(h, v, wbuf, 1, width, font->font_id, 1);
+        pdf_dev_set_string(h, v, wbuf, 1, width, font->font_id);
       }
 
       if (dvi_is_tracking_boxes())

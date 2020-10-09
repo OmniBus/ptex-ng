@@ -2,12 +2,12 @@
 .\"     Title: dvisvgm
 .\"    Author: Martin Gieseking <martin.gieseking@uos.de>
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 09/08/2018
+.\"      Date: 2020-03-19
 .\"    Manual: dvisvgm Manual
-.\"    Source: dvisvgm 2.6
+.\"    Source: dvisvgm 2.9.1
 .\"  Language: English
 .\"
-.TH "DVISVGM" "1" "09/08/2018" "dvisvgm 2\&.6" "dvisvgm Manual"
+.TH "DVISVGM" "1" "2020\-03\-19" "dvisvgm 2\&.9\&.1" "dvisvgm Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -46,10 +46,12 @@ SVG is a vector\-based graphics format and therefore dvisvgm tries to convert th
 .sp
 However, TeX\(cqs main source for font descriptions is Metafont, which produces bitmap output (GF files)\&. That\(cqs why not all obtainable TeX fonts are available in a scalable format\&. In these cases, dvisvgm tries to vectorize Metafont\(cqs output by tracing the glyph bitmaps\&. The results are not as perfect as most (manually optimized) PFB or OTF counterparts, but are nonetheless really nice in most cases\&.
 .sp
-When running dvisvgm without option \fB\-\-no\-fonts\fR, it creates \fIfont\fR elements (\fB<font>\fR\&...\fB</font>\fR) to embed the font data into the SVG files\&. Unfortunately, only few SVG renderers support these elements yet\&. Most web browsers and vector graphics applications don\(cqt evaluate them properly so that the text components of the resulting graphics might look strange\&. In order to create more compatible SVG files, command\-line option \fB\-\-no\-fonts\fR can be given to replace the font elements by plain graphics paths\&.
+When running dvisvgm without option \fB\-\-no\-fonts\fR, it creates \fIfont\fR elements (\fB<font>\fR\&...\fB</font>\fR) to embed the font data into the SVG files\&. Unfortunately, only few SVG renderers support these elements yet\&. Most web browsers and vector graphics applications don\(cqt evaluate them properly so that the text components of the resulting graphics might look strange\&. In order to create more compatible SVG files, command\-line option \fB\-\-no\-fonts\fR can be given to replace the font elements by plain graphics paths\&. Most web browsers (but only few external SVG renderers) also suppport WOFF and WOFF2 fonts that can be used instead of the default SVG fonts\&. Option \fB\-\-font\-format\fR offers the functionality to change the format applied to the fonts being embedded\&.
 .SH "OPTIONS"
 .sp
 dvisvgm provides a POSIX\-compliant command\-line interface with short and long option names\&. They may be given before and/or after the name of the file to be converted\&. Also, the order of specifying the options is not significant, i\&.e\&. you can add them in any order without changing dvisvgm\(cqs behavior\&. Certain options accept or require additional parameters which are directly appended to or separated by whitespace from a short option (e\&.g\&. \fB\-v0\fR or \fB\-v 0\fR)\&. Long options require an additional equals sign (\fB=\fR) between option name and argument but without any surrounding whitespace (e\&.g\&. \fB\-\-verbosity=0\fR)\&. Multiple short options that don\(cqt expect a further parameter can be combined after a single dash (e\&.g\&. \fB\-ejs\fR rather than \fB\-e \-j \-s\fR)\&.
+.sp
+Long option names may also be shortened by omitting trailing characters\&. As long as the shortened name is unambiguous, it\(cqs recognized and applied\&. For example, option \fB\-\-exact\-bbox\fR can be shortened to \fB\-\-exact\fR, \fB\-\-exa\fR, or \fB\-\-ex\fR\&. In case of an ambiguous abbreviation, dvisvgm prints an error message together with all matching option names\&.
 .PP
 \fB\-b, \-\-bbox\fR=\fIfmt\fR
 .RS 4
@@ -161,10 +163,94 @@ only affects the bounding box and does not transform the page content\&. Hence, 
 .RE
 .RE
 .PP
+\fB\-B, \-\-bitmap\-format\fR=\fIfmt\fR
+.RS 4
+This option sets the image format used to embed bitmaps extracted from PostScript or PDF data\&. By default, dvisvgm embeds all bitmaps as JPEG images because it\(cqs the most compact of the two formats supported by SVG\&. To select the alternative lossless PNG format,
+\fB\-\-bitmap\-format=png\fR
+can be used\&. There are some more format variants dvisvgm currently supports even though
+\fBjpeg\fR
+and
+\fBpng\fR
+should be sufficient in most cases\&. The following list gives an overview of the known format names which correspond to names of Ghostscript output devices\&.
+.TS
+tab(:);
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt.
+T{
+\fBnone\fR
+T}:T{
+disable processing of bitmap images
+T}
+T{
+\fBjpeg\fR
+T}:T{
+color JPEG format
+T}
+T{
+\fBjpeggray\fR
+T}:T{
+grayscale JPEG format
+T}
+T{
+\fBpng\fR
+T}:T{
+grayscale or 24\-bit color PNG format depending on current color space
+T}
+T{
+\fBpnggray\fR
+T}:T{
+grayscale PNG format
+T}
+T{
+\fBpngmono\fR
+T}:T{
+black\-and\-white PNG format
+T}
+T{
+\fBpngmonod\fR
+T}:T{
+dithered black\-and\-white PNG format
+T}
+T{
+\fBpng16\fR
+T}:T{
+4\-bit color PNG format
+T}
+T{
+\fBpng256\fR
+T}:T{
+8\-bit color PNG format
+T}
+T{
+\fBpng16m\fR
+T}:T{
+24\-bit color PNG format
+T}
+.TE
+.sp 1
+Since the collection of supported output devices can vary among local Ghostscript installations, not all formats may be available in some environments\&. dvisvgm quits with a PostScript error message if the selected output format requires a locally unsupported output device\&.
+.sp
+The two JPEG format specifiers accept an optional parameter to set the IJG quality level which must directly follow the format specifier separated by a colon, e\&.g\&.
+\fB\-\-bitmap\-format=jpeg:50\fR\&. The quality value is an integer between 0 and 100\&. Higher values result in better image quality but lower compression rates and therefore larger files\&. The default quality level is 75 which is applied if no quality parameter is given or if it\(cqs set to 0\&.
+.RE
+.PP
 \fB\-C, \-\-cache\fR[=\fIdir\fR]
 .RS 4
 To speed up the conversion process of bitmap fonts, dvisvgm saves intermediate conversion information in cache files\&. By default, these files are stored in
-\fB$HOME/\&.dvisvgm/cache\fR\&. If you prefer a different location, use option
+\fB$XDG_CACHE_HOME/dvisvgm/\fR
+or
+\fB$HOME/\&.cache/dvisvgm\fR
+if
+\fBXDG_CACHE_HOME\fR
+is not set\&. If you prefer a different location, use option
 \fB\-\-cache\fR
 to overwrite the default\&. Furthermore, it is also possible to disable the font caching mechanism completely with option
 \fB\-\-cache=none\fR\&. If argument
@@ -193,10 +279,16 @@ below for further information\&.
 .RS 4
 By default, dvisvgm exclusively uses RGB values of the form
 \fI#RRGGBB\fR
-to represent colors in the SVG file\&. According to the SVG standard, it\(cqs also possible to use color names (like
+or
+\fI#RGB\fR
+to represent colors in the SVG file\&. The latter is a short form for colors whose RGB components each consist of two identical hex digits, e\&.g\&.
+\fB#123\fR
+equals
+\fB#112233\fR\&. According to the SVG standard, it\(cqs also possible to use color names (like
 \fBblack\fR
 and
-\fBdarkblue\fR) for a limited number of predefined colors\&. In order to apply these color names rather than their RGB values, call dvisvgm with option
+\fBdarkblue\fR) for a limited number of
+predefined colors (\m[blue]https://www.w3.org/TR/SVG11/types.html#ColorKeywords\m[])\&. In order to apply these color names rather than their RGB values, call dvisvgm with option
 \fB\-\-colornames\fR\&. All colors without an SVG color name will still be represented by RGB values\&.
 .RE
 .PP
@@ -214,10 +306,10 @@ special command is created and forwarded to the PostScript special handler\&. Th
 for further information\&.
 .RE
 .PP
-\fB\-e, \-\-exact\fR
+\fB\-e, \-\-exact\-bbox\fR
 .RS 4
 This option tells dvisvgm to compute the precise bounding box of each character\&. By default, the values stored in a font\(cqs TFM file are used to determine a glyph\(cqs extent\&. As these values are intended to implement optimal character placements and are not designed to represent the exact dimensions, they don\(cqt necessarily correspond with the bounds of the visual glyphs\&. Thus, width and/or height of some glyphs may be larger (or smaller) than the respective TFM values\&. As a result, this can lead to clipped characters at the bounds of the SVG graphics\&. With option
-\fB\-\-exact\fR
+\fB\-\-exact\-bbox\fR
 given, dvisvgm analyzes the actual shape of each character and derives a usually tight bounding box\&.
 .RE
 .PP
@@ -237,7 +329,7 @@ or
 to the font format, e\&.g\&.
 \fB\-\-font\-format=woff,autohint\fR
 or
-\fB\-\-font\-format=woff,ah\fR\&.
+\fB\-\-fwoff,ah\fR\&.
 .sp
 Option
 \fB\-\-font\-format\fR
@@ -253,7 +345,9 @@ is omitted, dvisvgm looks for the default map files
 \fIpdftex\&.map\fR,
 \fIdvipdfm\&.map\fR, and
 \fIpsfonts\&.map\fR
-(in this order)\&. Otherwise, the files as option arguments are evaluated in the given order\&. Multiple filenames must be separated by commas without leading and/or trailing whitespace\&. By default, redefined mappings do not replace previous ones\&. However, each filename can be preceded by an optional mode specifier (\fB+\fR,
+(in this order)\&. Otherwise, the files given as option arguments are evaluated in the given order\&. Multiple filenames must be separated by commas without leading and/or trailing whitespace\&.
+.sp
+By default, redefined mappings do not replace previous ones\&. However, each filename can be preceded by an optional mode specifier (\fB+\fR,
 \fB\-\fR, or
 \fB=\fR) to change this behavior:
 .PP
@@ -293,7 +387,10 @@ replace previous entries\&. Afterwards, all definitions for the fonts given in
 \fImyfile2\&.map\fR
 are removed from the font map tree\&.
 .sp
-For further information about the map file formats and the mode specifiers, see the manuals of dvips and dvipdfm\&.
+For further information about the map file formats and the mode specifiers, see the manuals of
+dvips (\m[blue]https://tug.org/texinfohtml/dvips.html\m[])
+and
+dvipdfm (\m[blue]https://ctan.org/tex-archive/dviware/dvipdfm\m[])\&.
 .RE
 .RE
 .PP
@@ -301,7 +398,7 @@ For further information about the map file formats and the mode specifiers, see 
 .RS 4
 Tells dvisvgm to create overlapping grid segments when approximating color gradient fills (also see option
 \fB\-\-grad\-segments\fR
-below)\&. By default, adjacent segments don\(cqt overlap but only touch each other like separate tiles\&. However, this alignment can lead to visible gaps between the segments because the background color usually influences the color at the boundary of the segments if the SVG renderer uses anti\-aliasing to create smooth contours\&. One way to avoid this and to create seamlessly touching color regions is to enlarge the segments so that they extent into the area of their right and bottom neighbors\&. Since the latter are drawn on top of the overlapping parts, the visible size of all segments keeps unchanged\&. Just the former gaps disappear as the background is now completely covered by the correct colors\&. Currently, dvisvgm computes the overlapping segments separately for each patch of the mesh (a patch mesh may consist of multiple patches of the same type)\&. Therefore, there still might be visible gaps at the seam of two adjacent patches\&.
+below)\&. By default, adjacent segments don\(cqt overlap but only touch each other like separate tiles\&. However, this alignment can lead to visible gaps between the segments because the background color usually influences the color at the boundary of the segments if the SVG renderer uses anti\-aliasing to create smooth contours\&. One way to avoid this and to create seamlessly touching color regions is to enlarge the segments so that they extend into the area of their right and bottom neighbors\&. Since the latter are drawn on top of the overlapping parts, the visible size of all segments keeps unchanged\&. Just the former gaps disappear as the background is now completely covered by the correct colors\&. Currently, dvisvgm computes the overlapping segments separately for each patch of the mesh (a patch mesh may consist of multiple patches of the same type)\&. Therefore, there still might be visible gaps at the seam of two adjacent patches\&.
 .RE
 .PP
 \fB\-\-grad\-segments\fR=\fInumber\fR
@@ -325,6 +422,15 @@ If the size of the segments created to approximate gradient color fills falls be
 Prints a short summary of all available command\-line options\&. The optional
 \fImode\fR
 parameter is an integer value between 0 and 2\&. It selects the display variant of the help text\&. Mode 0 lists all options divided into categories with section headers\&. This is also the default if dvisvgm is called without parameters\&. Mode 1 lists all options ordered by the short option names, while mode 2 sorts the lines by the long option names\&.
+.sp
+A values in brackets after the description text indicate the default parameter of the option\&. They are applied if an option with a mandatory parameter is not used or if an optional parameter is omitted\&. For example, option
+\fB\-\-bbox\fR
+requires a size parameter which defaults to
+\fBmin\fR
+if
+\fB\-\-bbox\fR
+is not used\&. Option
+\fB\-\-zip\fR, which isn\(cqt applied by default, accepts an optional compression level parameter\&. If it\(cqs omitted, the stated default value 9 is used\&.
 .RE
 .PP
 \fB\-\-keep\fR
@@ -332,7 +438,7 @@ parameter is an integer value between 0 and 2\&. It selects the display variant 
 Disables the removal of temporary files as created by Metafont (usually \&.gf, \&.tfm, and \&.log files) or the TrueType/WOFF module\&.
 .RE
 .PP
-\fB\-\-libgs\fR=\fIfilename\fR
+\fB\-\-libgs\fR=\fIpath\fR
 .RS 4
 This option is only available if the Ghostscript library is not directly linked to dvisvgm and if PostScript support was not completely disabled during compilation\&. In this case, dvisvgm tries to load the shared GS library dynamically during runtime\&. By default, it expects the library\(cqs name to be
 \fBlibgs\&.so\&.X\fR
@@ -340,10 +446,20 @@ This option is only available if the Ghostscript library is not directly linked 
 \fBX\fR
 is the ABI version of the library) or
 \fBgsdll32\&.dll\fR/\fBgsdll64\&.dll\fR
-(Windows)\&. Option
+(Windows)\&. If dvisvgm doesn\(cqt find the library, option
 \fB\-\-libgs\fR
-can be used to give a different name\&. Alternatively, it\(cqs also possible to set the GS library name by the environment variable
-\fBLIBGS\fR\&. The latter has less precedence than the command\-line option, i\&.e\&. dvisvgm ignores variable
+can be used to specify the correct path and filename, e\&.g\&.
+\fB\-\-libgs=/usr/local/lib/libgs\&.so\&.9\fR
+or
+\fB\-\-libgs=\egs\egs9\&.25\ebin\egsdll64\&.dll\fR\&.
+.sp
+Alternatively, it\(cqs also possible to assign the path to environment variable
+\fBLIBGS\fR, e\&.g\&.
+\fBexport LIBGS=/usr/local/lib/libgs\&.so\&.9\fR
+or
+\fBset LIBGS=\egs\egs9\&.25\ebin\egsdll63\&.dll\fR\&.
+\fBLIBGS\fR
+has less precedence than the command\-line option, i\&.e\&. dvisvgm ignores variable
 \fBLIBGS\fR
 if
 \fB\-\-libgs\fR
@@ -427,7 +543,7 @@ If this option is given, dvisvgm doesn\(cqt create SVG
 \fIfont\fR
 elements but uses
 \fIpaths\fR
-instead\&. The resulting SVG files tend to be larger but they are concurrently more compatible with most applications that don\(cqt support SVG fonts yet\&. The optional argument
+instead\&. The resulting SVG files tend to be larger but are concurrently more compatible with most applications that don\(cqt support SVG fonts\&. The optional argument
 \fIvariant\fR
 selects the method how to substitute fonts by paths\&. Variant 0 creates
 \fIpath\fR
@@ -462,6 +578,82 @@ is the unique identifier referencing the intended special handler as listed by o
 .RS 4
 By default, dvisvgm creates CSS styles and class attributes to reference fonts\&. This variant is more compact than adding the complete font information to each text element over and over again\&. However, if you prefer direct font references, the default behavior can be disabled with option
 \fB\-\-no\-styles\fR\&.
+.RE
+.PP
+\fB\-O, \-\-optimize\fR[=\fImodules\fR]
+.RS 4
+Applies several optimizations on the generated SVG tree to reduce the file size\&. The optimizations are performed by running separate optimizer modules specified by optional argument
+\fImodules\fR\&. It may consist of a single module name or a comma\-separated list of several module names\&. The corresponding modules are executed one by one in the given order and thus transform the XML tree gradually\&.
+.sp
+The following list describes the currently available optimizer modules\&.
+.PP
+\fBlist\fR
+.RS 4
+Lists all available optimizer modules and exits\&.
+.RE
+.PP
+\fBnone\fR
+.RS 4
+If this argument is given, dvisvgm doesn\(cqt apply any optimization\&.
+\fBnone\fR
+can\(cqt be combined with other module names\&.
+.RE
+.PP
+\fBall\fR
+.RS 4
+Performs all optimizations listed below\&. This is also the default if option
+\fB\-\-optimize\fR
+is used without argument\&. The modules are executed in a predefined order that usually leads to the best results\&.
+\fBall\fR
+can\(cqt be combined with other module names\&.
+.RE
+.PP
+\fBcollapse\-groups\fR
+.RS 4
+Combines nested group elements (\fB<g>\fR\&...\fB</g>\fR) that contain only a single group each\&. If possible, the group attributes are moved to the outermost element of the processed subtree\&. This module also unwraps group elements that have no attributes at all\&.
+.RE
+.PP
+\fBgroup\-attributes\fR
+.RS 4
+Creates groups (\fB<g>\fR\&...\fB</g>\fR) for common attributes around adjacent elements\&. Each attribute is moved to a separate group so that multiple common attributes lead to nested groups\&. They can be combined by applying optimizer module
+\fIcollapse\-groups\fR
+afterwards\&. The algorithm only takes inheritable properties, such as
+\fBfill\fR
+or
+\fBstroke\-width\fR, into account and only removes them from an element if none of the other attributes, like
+\fBid\fR, prevents this\&.
+.RE
+.PP
+\fBremove\-clippath\fR
+.RS 4
+Removes all redundant
+\fIclipPath\fR
+elements\&. This optimization was already present in former versions of dvisvgm and was always applied by default\&. This behavior is retained, i\&.e\&. dvisvgm executes this module even if option
+\fB\-\-optimize\fR
+is not given\&. You can use argument
+\fInone\fR
+to prevent that\&.
+.RE
+.PP
+\fBsimplify\-text\fR
+.RS 4
+If a
+\fBtext\fR
+element only contains whitespace nodes and
+\fBtspan\fR
+elements, all common inheritable attributes of the latter are moved to the enclosing text element\&. All
+\fBtspan\fR
+elements without further attributes are unwrapped\&.
+.RE
+.PP
+\fBsimplify\-transform\fR
+.RS 4
+Tries to shorten all
+\fItransform\fR
+attributes\&. This module combines the transformation commands of each attribute and decomposes the resulting transformation matrix into a sequence of basic transformations, i\&.e\&. translation, scaling, rotation, and skewing\&. If this sequence is shorter than the equivalent
+\fImatrix\fR
+expression, it\(cqs assigned to the attribute\&. Otherwise, the matrix expression is used\&.
+.RE
 .RE
 .PP
 \fB\-o, \-\-output\fR=\fIpattern\fR
@@ -573,17 +765,20 @@ provides a combined hash computed from the DVI data and the command\-line option
 Since the page number isn\(cqt part of the file name by default, different DVI pages with identical contents get the same file name\&. Therefore, only the first one is converted while the others are skipped\&. To create separate files for each page, you can add the page number to the output pattern, e\&.g\&.
 \fB\-\-output="%f\-%p\-%hc"\fR\&.
 .sp
-By default, dvisvgm uses the XXH64 hash algorithm to compute the values provided through
+By default, dvisvgm uses the fast XXH64 hash algorithm to compute the values provided through
 \fB%hd\fR
 and
-\fB%hc\fR\&. It\(cqs extremely fast, and a 64\-bit hash should be sufficient for most documents with an average size of pages\&. Alternatively, XXH32 and MD5 can be used as well\&. The desired algorithm is specified by argument
+\fB%hc\fR\&. 64\-bit hashes should be sufficient for most documents with an average size of pages\&. Alternatively, XXH32 and MD5 can be used as well\&. The desired algorithm is specified by argument
 \fIparams\fR
 of option
 \fB\-\-page\-hashes\fR\&. It takes one of the strings
 \fBMD5\fR,
 \fBXXH32\fR, and
 \fBXXH64\fR, where the names can be given in lower case too, like
-\fB\-\-page\-hashes=md5\fR\&.
+\fB\-\-page\-hashes=md5\fR\&. Since version 0\&.7\&.1, xxHash provides an experimental 128\-bit hash function, whose algorithm may still change with the next versions of the library\&. If the corresponding API is available, dvisvgm supports the new hash function and option
+\fB\-\-page\-hashes\fR
+additionally accepts the algorithm specifier
+\fBXXH128\fR\&.
 .sp
 Finally, option
 \fB\-\-page\-hashes\fR
@@ -981,25 +1176,37 @@ dvisvgm offers its own small set of specials\&. The following list gives a brief
 .PP
 \fBdvisvgm:raw\fR \fItext\fR
 .RS 4
-Adds an arbitrary sequence of characters to the page section of the SVG document\&. dvisvgm does not perform any validation here, thus the user has to ensure that the resulting SVG is still valid\&. Parameter
+Adds an arbitrary sequence of XML nodes to the page section of the SVG document\&. dvisvgm checks syntax and proper nesting of the inserted elements but does not perform any validation, thus the user has to ensure that the resulting SVG is still valid\&. Opening and closing tags may be distributed among different
+\fIraw\fR
+specials\&. The tags themselves can also be split but must be continued with the immediately following
+\fIraw\fR
+special\&. Both syntactically incorrect and wrongly nested tags lead to error messages\&. Parameter
 \fItext\fR
-may contain the expressions
+may also contain the expressions
 \fB{?x}\fR,
-\fB{?y}\fR, and
-\fB{?color}\fR
+\fB{?y}\fR,
+\fB{?color}\fR, and
+\fB{?matrix}\fR
 that expand to the current
 \fIx\fR
 or
 \fIy\fR
-coordinate and the current color, respectively\&. Furthermore,
+coordinate, the current color, and current transformation matrix, respectively\&. Character sequence
 \fB{?nl}\fR
-expands to a newline character\&.
+expands to a newline character\&. Finally, constructions of the form
+\fB{?(\fR\fB\fIexpr\fR\fR\fB)}\fR
+enable the evaluation of mathematical expressions which may consist of basic arithmetic operations including modulo\&. Like above, the variables
+\fIx\fR
+and
+\fIy\fR
+represent the current coordinates\&. Example:
+\fB{?(\-10*(x+2y)\-5)}\fR\&.
 .RE
 .PP
 \fBdvisvgm:rawdef\fR \fItext\fR
 .RS 4
 This command is similar to
-\fBdvisvgm:raw\fR, but puts the raw text into the <defs> section of the SVG document currently being generated\&.
+\fBdvisvgm:raw\fR, but puts the XML nodes into the <defs> section of the SVG document currently being generated\&.
 .RE
 .PP
 \fBdvisvgm:rawset\fR \fIname\fR \&... \fBdvisvgm:endrawset\fR
@@ -1012,7 +1219,7 @@ specials enclosed by
 \fBdvisvgm:rawset\fR
 and
 \fBdvisvgm:endrawset\fR
-are not evaluated immediately but jointly stored under the given
+are not evaluated immediately but stored together under the given
 \fIname\fR
 for later use\&. Once defined, the named fragment can be referenced throughout the DVI file by
 \fBdvisvgm:rawput\fR
@@ -1060,6 +1267,16 @@ can be given together with a unit specifier (see option
 \fB\-\-bbox\fR) or as plain floating point numbers\&. In the latter case, TeX point units are assumed (1in = 72\&.27pt)\&.
 .RE
 .PP
+\fBdvisvgm:bbox\fR lock
+.RS 4
+Locks the bounding box of the current page and prevents it from further updating, i\&.e\&. graphics elements added after calling this special are not taken into account in determining the extent of the bounding box\&.
+.RE
+.PP
+\fBdvisvgm:bbox\fR unlock
+.RS 4
+Unlocks the previously locked bounding box of the current page so that it gets updated again when adding graphics elements to the page\&.
+.RE
+.PP
 \fBdvisvgm:bbox\fR n[ew] \fIname\fR
 .RS 4
 Defines or resets a local bounding box called
@@ -1077,7 +1294,7 @@ expands to the four values
 wasn\(cqt previously defined, all four values equal to zero\&.
 .RE
 .PP
-\fBdvisvgm:bbox\fR \fIwidth\fR \fIheight\fR [\fIdepth\fR]
+\fBdvisvgm:bbox\fR \fIwidth\fR \fIheight\fR [\fIdepth\fR] [\fBtransform\fR]
 .RS 4
 Updates the bounding box of the current page by embedding a virtual rectangle (\fIx\fR,
 \fIy\fR,
@@ -1093,17 +1310,23 @@ is specified, dvisvgm embeds a second rectangle (\fIx\fR,
 can be given together with a unit specifier (see option
 \fB\-\-bbox\fR) or as plain floating point numbers\&. In the latter case, TeX point units are assumed (1in = 72\&.27pt)\&. Depending on size and position of the virtual rectangle, this command either enlarges the overall bounding box or leaves it as is\&. It\(cqs not possible to reduce its extent\&. This special should be used together with
 \fBdvisvgm:raw\fR
-in order to update the viewport of the page properly\&.
+in order to update the viewport of the page properly\&. By default, the box extents are assigned unchanged and, in particular, are not altered by transformation commands\&. In order to apply the current transformation matrix, the optional modifier
+\fBtransform\fR
+can be added at the end of the special statement\&.
 .RE
 .PP
-\fBdvisvgm:bbox\fR a[bs] \fIx1\fR \fIy1\fR \fIx2\fR \fIy2\fR
+\fBdvisvgm:bbox\fR a[bs] \fIx1\fR \fIy1\fR \fIx2\fR \fIy2\fR [\fBtransform\fR]
 .RS 4
-This variant of the bbox special updates the bounding box by embedding a virtual rectangle (\fIx1\fR,\fIy1\fR,\fIx2\fR,\fIy2\fR)\&. The points (\fIx1\fR,\fIy1\fR) and (\fIx2\fR,\fIy2\fR) denote the absolute coordinates of two diagonal corners of the rectangle\&.
+This variant of the bbox special updates the bounding box by embedding a virtual rectangle (\fIx1\fR,\fIy1\fR,\fIx2\fR,\fIy2\fR)\&. The points (\fIx1\fR,\fIy1\fR) and (\fIx2\fR,\fIy2\fR) denote the absolute coordinates of two diagonal corners of the rectangle\&. As with the relative special variant described above, the optional modifier
+\fBtransform\fR
+allows for applying the current transformation matrix to the bounding box\&.
 .RE
 .PP
-\fBdvisvgm:bbox\fR f[ix] \fIx1\fR \fIy1\fR \fIx2\fR \fIy2\fR
+\fBdvisvgm:bbox\fR f[ix] \fIx1\fR \fIy1\fR \fIx2\fR \fIy2\fR [\fBtransform\fR]
 .RS 4
-This variant of the bbox special assigns an absolute (final) bounding box to the resulting SVG\&. After executing this command, dvisvgm doesn\(cqt further alter the bounding box coordinates, except this special is called again later\&. The points (\fIx1\fR,\fIy1\fR) and (\fIx2\fR,\fIy2\fR) denote the absolute coordinates of two diagonal corners of the rectangle\&.
+This variant of the bbox special assigns an absolute (final) bounding box to the resulting SVG\&. After executing this command, dvisvgm doesn\(cqt further alter the bounding box coordinates, except this special is called again later\&. The points (\fIx1\fR,\fIy1\fR) and (\fIx2\fR,\fIy2\fR) denote the absolute coordinates of two diagonal corners of the rectangle\&. As with the relative special variant described above, the optional modifier
+\fBtransform\fR
+allows for applying the current transformation matrix to the bounding box\&.
 .sp
 The following TeX snippet adds two raw SVG elements to the output and updates the bounding box accordingly:
 .sp
@@ -1112,11 +1335,11 @@ The following TeX snippet adds two raw SVG elements to the output and updates th
 .\}
 .nf
 \especial{dvisvgm:raw <circle cx=\*(Aq{?x}\*(Aq cy=\*(Aq{?y}\*(Aq r=\*(Aq10\*(Aq stroke=\*(Aqblack\*(Aq fill=\*(Aqred\*(Aq/>}%
-\especial{dvisvgm:bbox 10bp 10bp 10bp}%
-\especial{dvisvgm:bbox \-10bp 10bp 10bp}
+\especial{dvisvgm:bbox 10bp 10bp 10bp transform}%
+\especial{dvisvgm:bbox \-10bp 10bp 10bp transform}
 
-\especial{dvisvgm:raw <path d=\*(AqM50 200 L10 250 H100 Z\*(Aq stroke=\*(Aqblack\*(Aq fill=\*(Aqblue\*(Aq/>}
-\especial{dvisvgm:bbox abs 10bp 200bp 100bp 250bp}
+\especial{dvisvgm:raw <path d=\*(AqM50 200 L10 250 H100 Z\*(Aq stroke=\*(Aqblack\*(Aq fill=\*(Aqblue\*(Aq/>}%
+\especial{dvisvgm:bbox abs 10bp 200bp 100bp 250bp transform}
 .fi
 .if n \{\
 .RE
@@ -1176,8 +1399,8 @@ pdfTeX user manual (\m[blue]https://ctan.org/pkg/pdftex\m[])\&.
 \fBps\fR
 .RS 4
 The famous DVI driver
-\fIdvips\fR
-introduced its own set of specials in order to embed PostScript code into DVI files, which greatly improves the capabilities of DVI documents\&. One aim of dvisvgm is to completely evaluate all PostScript snippets and to convert as many of them as possible to SVG\&. In contrast to dvips, dvisvgm uses floating point arithmetics to compute the precise position of each graphic element, i\&.e\&. it doesn\(cqt round the coordinates\&. Therefore, the relative locations of the graphic elements may slightly differ from those computed by dvips\&.
+\fIdvips\fR (\m[blue]https://www.tug.org/texinfohtml/dvips.html\m[])
+introduced its own set of specials in order to embed PostScript code into DVI files, which greatly improves the capabilities of DVI documents\&. One aim of dvisvgm is to completely evaluate all PostScript fragments and to convert as many of them as possible to SVG\&. In contrast to dvips, dvisvgm uses floating point arithmetics to compute the precise position of each graphic element, i\&.e\&. it doesn\(cqt round the coordinates\&. Therefore, the relative locations of the graphic elements may slightly differ from those computed by dvips\&.
 .sp
 Since PostScript is a rather complex language, dvisvgm does not implement its own PostScript interpreter but relies on
 Ghostscript (\m[blue]https://ghostscript.com\m[])
@@ -1214,66 +1437,75 @@ If you call dvisvgm with option
 The TPIC special set defines instructions for drawing simple geometric objects\&. Some LaTeX packages, like eepic and tplot, use these specials to describe graphics\&.
 .RE
 .SH "EXAMPLES"
-.sp
-.if n \{\
+.PP
+\fBdvisvgm file\fR
 .RS 4
-.\}
-.nf
-dvisvgm file
-.fi
-.if n \{\
+Converts the first page of
+\fIfile\&.dvi\fR
+to
+\fIfile\&.svg\fR\&.
 .RE
-.\}
-.sp
-Converts the first page of \fIfile\&.dvi\fR to \fIfile\&.svg\fR\&.
-.sp
-.if n \{\
+.PP
+\fBdvisvgm \-p1\-5 file\fR
 .RS 4
-.\}
-.nf
-dvisvgm \- < file\&.dvi
-.fi
-.if n \{\
+Converts the first five pages of
+\fIfile\&.dvi\fR
+to
+\fIfile\-1\&.svg\fR,\&...,\fIfile\-5\&.svg\fR\&.
 .RE
-.\}
-.sp
-Converts the first page of \fIfile\&.dvi\fR to \fIstdin\&.svg\fR where the contents of \fIfile\&.dvi\fR is read from \fBstdin\fR\&.
-.sp
-.if n \{\
+.PP
+\fBdvisvgm \-p1\- file\fR
 .RS 4
-.\}
-.nf
-dvisvgm \-z file
-.fi
-.if n \{\
+Converts all pages of
+\fIfile\&.dvi\fR
+to separate SVG files\&.
 .RE
-.\}
-.sp
-Converts the first page of \fIfile\&.dvi\fR to \fIfile\&.svgz\fR with default compression level 9\&.
-.sp
-.if n \{\
+.PP
+\fBdvisvgm \-p1,3 \-O file\fR
 .RS 4
-.\}
-.nf
-dvisvgm \-p5 \-z3 \-ba4\-l \-onewfile file
-.fi
-.if n \{\
+Converts the first and third page of
+\fIfile\&.dvi\fR
+to optimized SVG files\&.
 .RE
-.\}
-.sp
-Converts the fifth page of \fIfile\&.dvi\fR to \fInewfile\&.svgz\fR with compression level 3\&. The bounding box is set to DIN/ISO A4 in landscape format\&.
-.sp
-.if n \{\
+.PP
+\fBdvisvgm \- < file\&.dvi\fR
 .RS 4
-.\}
-.nf
-dvisvgm \-\-transform="R20,w/3,2h/5 T1cm,1cm S2,3" file
-.fi
-.if n \{\
+Converts the first page of
+\fIfile\&.dvi\fR
+to
+\fIstdin\&.svg\fR
+where the contents of
+\fIfile\&.dvi\fR
+is read from
+\fBstdin\fR\&.
 .RE
-.\}
-.sp
-Converts the first page of \fIfile\&.dvi\fR to \fIfile\&.svg\fR where three transformations are applied\&.
+.PP
+\fBdvisvgm \-z file\fR
+.RS 4
+Converts the first page of
+\fIfile\&.dvi\fR
+to
+\fIfile\&.svgz\fR
+with default compression level 9\&.
+.RE
+.PP
+\fBdvisvgm \-p5 \-z3 \-ba4\-l \-o newfile file\fR
+.RS 4
+Converts the fifth page of
+\fIfile\&.dvi\fR
+to
+\fInewfile\&.svgz\fR
+with compression level 3\&. The bounding box is set to DIN/ISO A4 in landscape format\&.
+.RE
+.PP
+\fBdvisvgm \-\-transform="R20,w/3,2h/5 T1cm,1cm S2,3" file\fR
+.RS 4
+Converts the first page of
+\fIfile\&.dvi\fR
+to
+\fIfile\&.svg\fR
+where three transformations are applied\&.
+.RE
 .SH "ENVIRONMENT"
 .sp
 dvisvgm uses the \fBkpathsea\fR library for locating the files that it opens\&. Hence, the environment variables described in the library\(cqs documentation influence the converter\&.
@@ -1456,4 +1688,4 @@ Please report bugs using the bug tracker at GitHub (\m[blue]https://github.com/m
 Written by Martin Gieseking <\m[blue]\fBmartin\&.gieseking@uos\&.de\fR\m[]>
 .SH "COPYING"
 .sp
-Copyright \(co 2005\-2018 Martin Gieseking\&. Free use of this software is granted under the terms of the GNU General Public License (GPL) version 3 or, (at your option) any later version\&.
+Copyright \(co 2005\-2020 Martin Gieseking\&. Free use of this software is granted under the terms of the GNU General Public License (GPL) version 3 or, (at your option) any later version\&.

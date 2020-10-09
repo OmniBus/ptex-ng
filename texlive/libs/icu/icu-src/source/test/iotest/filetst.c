@@ -731,7 +731,7 @@ static void TestfgetsNewLineHandling(void) {
 static void TestLineCount(const char *prefixLine, const char *line, int32_t numRepititions) {
     UChar buffer[64];
     UChar expectedBuffer[64];
-    int32_t lineLen = strlen(line);
+    int32_t lineLen = (int32_t)strlen(line);
     UChar *returnedUCharBuffer;
     int32_t repetitions;
     UFILE *myFile = NULL;
@@ -1120,7 +1120,7 @@ static void TestFilePrintCompatibility(void) {
 }
 #endif
 
-#define TestFPrintFormat(uFormat, uValue, cFormat, cValue) \
+#define TestFPrintFormat(uFormat, uValue, cFormat, cValue) UPRV_BLOCK_MACRO_BEGIN { \
     myFile = u_fopen(STANDARD_TEST_FILE, "w", STANDARD_TEST_LOCALE, NULL);\
     if (myFile == NULL) {\
         log_err("Can't write test file for %s.\n", uFormat);\
@@ -1146,6 +1146,7 @@ static void TestFilePrintCompatibility(void) {
     if (buffer[uNumPrinted+1] != '*') {\
         log_err("%" uFormat " too much stored\n");\
     }\
+} UPRV_BLOCK_MACRO_END
 
 #if !UCONFIG_NO_FORMATTING
 static void TestFprintfFormat(void) {
@@ -1381,6 +1382,7 @@ static void TestFScanset(void) {
 #endif
 #if !UCONFIG_NO_FORMATTING
 static void TestBadFScanfFormat(const char *format, const UChar *uValue, const char *cValue) {
+    (void)cValue; // suppress compiler warnings about unused variable
     UFILE *myFile;
     UChar uBuffer[256];
     int32_t uNumScanned;

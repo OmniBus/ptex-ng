@@ -1,5 +1,5 @@
-/*
-** mruby/compile.h - mruby parser
+/**
+** @file mruby/compile.h - mruby parser
 **
 ** See Copyright Notice in mruby.h
 */
@@ -24,7 +24,7 @@ typedef struct mrbc_context {
   mrb_sym *syms;
   int slen;
   char *filename;
-  short lineno;
+  uint16_t lineno;
   int (*partial_hook)(struct mrb_parser_state*);
   void *partial_data;
   struct RClass *target_class;
@@ -33,6 +33,7 @@ typedef struct mrbc_context {
   mrb_bool no_exec:1;
   mrb_bool keep_lv:1;
   mrb_bool no_optimize:1;
+  struct RProc *upper;
 
   size_t parser_nerr;
 } mrbc_context;
@@ -66,7 +67,7 @@ enum mrb_lex_state_enum {
 
 /* saved error message */
 struct mrb_parser_message {
-  int lineno;
+  uint16_t lineno;
   int column;
   char* message;
 };
@@ -104,7 +105,7 @@ struct mrb_parser_heredoc_info {
   mrb_ast_node *doc;
 };
 
-#define MRB_PARSER_TOKBUF_MAX 65536
+#define MRB_PARSER_TOKBUF_MAX (UINT16_MAX-1)
 #define MRB_PARSER_TOKBUF_SIZE 256
 
 /* parser structure */
@@ -117,8 +118,8 @@ struct mrb_parser_state {
   FILE *f;
 #endif
   mrbc_context *cxt;
-  char const *filename;
-  int lineno;
+  mrb_sym filename_sym;
+  uint16_t lineno;
   int column;
 
   enum mrb_lex_state_enum lstate;
@@ -142,7 +143,6 @@ struct mrb_parser_state {
   mrb_ast_node *heredocs_from_nextline;
   mrb_ast_node *parsing_heredoc;
   mrb_ast_node *lex_strterm_before_heredoc;
-  mrb_bool heredoc_end_now:1; /* for mirb */
 
   void *ylval;
 
@@ -152,14 +152,16 @@ struct mrb_parser_state {
 
   mrb_bool no_optimize:1;
   mrb_bool capture_errors:1;
+  struct RProc *upper;
   struct mrb_parser_message error_buffer[10];
   struct mrb_parser_message warn_buffer[10];
 
   mrb_sym* filename_table;
-  size_t filename_table_length;
-  int current_filename_index;
+  uint16_t filename_table_length;
+  uint16_t current_filename_index;
 
   struct mrb_jmpbuf* jmp;
+  mrb_ast_node *nvars;
 };
 
 MRB_API struct mrb_parser_state* mrb_parser_new(mrb_state*);
@@ -167,7 +169,7 @@ MRB_API void mrb_parser_free(struct mrb_parser_state*);
 MRB_API void mrb_parser_parse(struct mrb_parser_state*,mrbc_context*);
 
 MRB_API void mrb_parser_set_filename(struct mrb_parser_state*, char const*);
-MRB_API char const* mrb_parser_get_filename(struct mrb_parser_state*, uint16_t idx);
+MRB_API mrb_sym mrb_parser_get_filename(struct mrb_parser_state*, uint16_t idx);
 
 /* utility functions */
 #ifndef MRB_DISABLE_STDIO
@@ -178,7 +180,15 @@ MRB_API struct mrb_parser_state* mrb_parse_nstring(mrb_state*,const char*,size_t
 MRB_API struct RProc* mrb_generate_code(mrb_state*, struct mrb_parser_state*);
 MRB_API mrb_value mrb_load_exec(mrb_state *mrb, struct mrb_parser_state *p, mrbc_context *c);
 
-/* program load functions */
+/** program load functions 
+* Please note! Currently due to interactions with the GC calling these functions will 
+* leak one RProc object per function call.
+* To prevent this save the current memory arena before calling and restore the arena
+* right after, like so
+* int ai = mrb_gc_arena_save(mrb);
+* mrb_value status = mrb_load_string(mrb, buffer);
+* mrb_gc_arena_restore(mrb, ai);
+*/
 #ifndef MRB_DISABLE_STDIO
 MRB_API mrb_value mrb_load_file(mrb_state*,FILE*);
 MRB_API mrb_value mrb_load_file_cxt(mrb_state*,FILE*, mrbc_context *cxt);

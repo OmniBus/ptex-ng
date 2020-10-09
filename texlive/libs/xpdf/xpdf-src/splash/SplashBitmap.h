@@ -16,7 +16,20 @@
 #endif
 
 #include <stdio.h>
+#include <limits.h>
+#include <stdint.h>
 #include "SplashTypes.h"
+
+//------------------------------------------------------------------------
+
+// ssize_t isn't well-defined, so define our own
+#if SIZE_MAX == UINT_MAX
+  typedef int SplashBitmapRowSize;
+# define SplashBitmapRowSizeMax INT_MAX
+#else
+  typedef long long SplashBitmapRowSize;
+# define SplashBitmapRowSizeMax LLONG_MAX
+#endif
 
 //------------------------------------------------------------------------
 // SplashBitmap
@@ -31,14 +44,14 @@ public:
   // upside-down, i.e., with the last row first in memory.
   SplashBitmap(int widthA, int heightA, int rowPad,
 	       SplashColorMode modeA, GBool alphaA,
-	       GBool topDown = gTrue);
+	       GBool topDown, SplashBitmap *parentA);
 
   ~SplashBitmap();
 
   int getWidth() { return width; }
   int getHeight() { return height; }
-  int getRowSize() { return rowSize; }
-  int getAlphaRowSize() { return width; }
+  SplashBitmapRowSize getRowSize() { return rowSize; }
+  size_t getAlphaRowSize() { return alphaRowSize; }
   SplashColorMode getMode() { return mode; }
   SplashColorPtr getDataPtr() { return data; }
   Guchar *getAlphaPtr() { return alpha; }
@@ -58,14 +71,24 @@ public:
 private:
 
   int width, height;		// size of bitmap
-  int rowSize;			// size of one row of data, in bytes
+  SplashBitmapRowSize rowSize;	// size of one row of data, in bytes
 				//   - negative for bottom-up bitmaps
+  size_t alphaRowSize;		// size of one row of alpha, in bytes
   SplashColorMode mode;		// color mode
   SplashColorPtr data;		// pointer to row zero of the color data
   Guchar *alpha;		// pointer to row zero of the alpha data
 				//   (always top-down)
 
+  // save the last-allocated (large) bitmap data and reuse if possible
+  SplashBitmap *parent;
+  SplashColorPtr oldData;
+  Guchar *oldAlpha;
+  SplashBitmapRowSize oldRowSize;
+  size_t oldAlphaRowSize;
+  int oldHeight;
+
   friend class Splash;
 };
+
 
 #endif

@@ -19,6 +19,9 @@
 #define FPOSITER_H
 
 #include "unicode/utypes.h"
+
+#if U_SHOW_CPLUSPLUS_API
+
 #include "unicode/uobject.h"
 
 /**
@@ -46,13 +49,6 @@ U_NAMESPACE_END
 U_NAMESPACE_BEGIN
 
 class UVector32;
-
-// Forward declaration for number formatting:
-namespace number {
-namespace impl {
-class NumberStringBuilder;
-}
-}
 
 /**
  * FieldPositionIterator returns the field ids and their start/limit positions generated
@@ -114,7 +110,6 @@ private:
     void setData(UVector32 *adopt, UErrorCode& status);
 
     friend class FieldPositionIteratorHandler;
-    friend class number::impl::NumberStringBuilder;
 
     UVector32 *data;
     int32_t pos;
@@ -123,5 +118,7 @@ private:
 U_NAMESPACE_END
 
 #endif /* #if !UCONFIG_NO_FORMATTING */
+
+#endif /* U_SHOW_CPLUSPLUS_API */
 
 #endif // FPOSITER_H

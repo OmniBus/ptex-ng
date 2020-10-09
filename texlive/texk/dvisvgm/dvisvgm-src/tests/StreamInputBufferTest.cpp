@@ -2,7 +2,7 @@
 ** StreamInputBufferTest.cpp                                            **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -19,15 +19,16 @@
 *************************************************************************/
 
 #include <gtest/gtest.h>
+#include <map>
 #include <sstream>
+#include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include "InputBuffer.hpp"
 #include "InputReader.hpp"
 
 using std::istringstream;
+using std::map;
 using std::string;
-using std::unordered_map;
 
 TEST(StreamInputBufferTest, get) {
 	istringstream iss("abcdefghijklmnopqrstuvwxyz");
@@ -79,6 +80,20 @@ TEST(StreamInputBufferTest, skip) {
 	in.skipUntil("ijk");
 	EXPECT_EQ(in.peek(), 'l');
 	in.skipUntil("z");
+	EXPECT_TRUE(in.eof());
+}
+
+
+TEST(StreamInputBufferTest, readUntil) {
+	istringstream iss("abcdefghijklmnopqrstuvwxyz");
+	StreamInputBuffer buffer(iss, 10);
+	BufferInputReader in(buffer);
+	EXPECT_EQ(in.readUntil("ijk"), "abcdefghijk");
+	EXPECT_EQ(in.peek(), 'l');
+	EXPECT_EQ(in.readUntil("q"), "lmnopq");
+	EXPECT_EQ(in.peek(), 'r');
+	EXPECT_EQ(in.readUntil("X"), "rstuvwxyz");
+	EXPECT_LT(in.peek(), 0);
 	EXPECT_TRUE(in.eof());
 }
 
@@ -180,16 +195,34 @@ TEST(StreamInputBufferTest, parseDouble) {
 }
 
 
-TEST(StreamInputBufferTest, attribs) {
-	istringstream iss("aaa=1 bbb=2 ccc=3 d e");
+TEST(StreamInputBufferTest, attribs1) {
+	istringstream iss("aaa=1 bbb=2 c-c-c=3 3d=4 e");
 	StreamInputBuffer buffer(iss, 10);
 	BufferInputReader in(buffer);
-	unordered_map<string,string> attr;
-	int s = in.parseAttributes(attr);
+	map<string,string> attr;
+	int s = in.parseAttributes(attr, true);
 	EXPECT_EQ(s, 3);
 	EXPECT_EQ(attr["aaa"], "1");
 	EXPECT_EQ(attr["bbb"], "2");
-	EXPECT_EQ(attr["ccc"], "3");
+	EXPECT_EQ(attr["c-c-c"], "3");
+	EXPECT_THROW(attr.at("3d"), std::out_of_range);
+	EXPECT_THROW(attr.at("e"), std::out_of_range);
+}
+
+
+TEST(StreamInputBufferTest, attribs2) {
+	istringstream iss("aaa='1' bbb='2' c-c-c='3' d e='value'");
+	StreamInputBuffer buffer(iss, 10);
+	BufferInputReader in(buffer);
+	map<string,string> attr;
+	int s = in.parseAttributes(attr, false, "'");
+	EXPECT_EQ(s, 5);
+	EXPECT_EQ(attr["aaa"], "1");
+	EXPECT_EQ(attr["bbb"], "2");
+	EXPECT_EQ(attr["c-c-c"], "3");
+	EXPECT_EQ(attr["e"], "value");
+	EXPECT_NO_THROW(attr.at("d"));
+	EXPECT_TRUE(attr.at("d").empty());
 }
 
 
@@ -216,13 +249,14 @@ TEST(StreamInputBufferTest, find) {
 
 
 TEST(StreamInputBufferTest, getString) {
-	istringstream iss("abcd efgh \"ijklm\"n abcdef 01234");
+	istringstream iss("abcd efgh \"ij'klm\"n abcdef '012\"34'xyz");
 	StreamInputBuffer buffer(iss);
 	BufferInputReader reader(buffer);
 	EXPECT_EQ(reader.getString(), "abcd");
 	EXPECT_EQ(reader.getString(), "efgh");
-	EXPECT_EQ(reader.getQuotedString('"'), "ijklm");
-	EXPECT_EQ(reader.getQuotedString('"'), "");
+	EXPECT_EQ(reader.getQuotedString("\""), "ij'klm");
+	EXPECT_EQ(reader.getQuotedString("\""), "");
 	EXPECT_EQ(reader.getString(4), "n ab");
 	EXPECT_EQ(reader.getQuotedString(0), "cdef");
+	EXPECT_EQ(reader.getQuotedString("\"'"), "012\"34");
 }

@@ -2,7 +2,7 @@
 ** HashFunctionTest.cpp                                                 **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -35,10 +35,8 @@ TEST(HashFunctionTest, md5) {
 	md5.reset();
 	md5.update("0123456789");
 	EXPECT_EQ(md5.digestString(), "781e5e245d69b566979b86e28d23f2c7");
-	uint8_t bytes[] = {0x78, 0x1e, 0x5e, 0x24, 0x5d, 0x69, 0xb5, 0x66, 0x97, 0x9b, 0x86, 0xe2, 0x8d, 0x23, 0xf2, 0xc7};
-	int i=0;
-	for (uint8_t byte : md5.digestValue())
-		EXPECT_EQ(byte, bytes[i++]);
+	vector<uint8_t> bytes = {0x78, 0x1e, 0x5e, 0x24, 0x5d, 0x69, 0xb5, 0x66, 0x97, 0x9b, 0x86, 0xe2, 0x8d, 0x23, 0xf2, 0xc7};
+	EXPECT_EQ(md5.digestValue(), bytes);
 }
 
 
@@ -52,10 +50,8 @@ TEST(HashFunctionTest, xxh32) {
 	xxh32.reset();
 	xxh32.update("0123456789");
 	EXPECT_EQ(xxh32.digestString(), "950c9c0a");
-	uint8_t bytes[] = {0x95, 0x0c, 0x9c, 0x0a};
-	int i=0;
-	for (uint8_t byte : xxh32.digestValue())
-		EXPECT_EQ(byte, bytes[i++]);
+	vector<uint8_t> bytes = {0x95, 0x0c, 0x9c, 0x0a};
+	EXPECT_EQ(xxh32.digestValue(), bytes);
 }
 
 
@@ -69,11 +65,26 @@ TEST(HashFunctionTest, xxh64) {
 	xxh64.reset();
 	xxh64.update("0123456789");
 	EXPECT_EQ(xxh64.digestString(), "3f5fc178a81867e7");
-	uint8_t bytes[] = {0x3f, 0x5f, 0xc1, 0x78, 0xa8, 0x18, 0x67, 0xe7};
-	int i=0;
-	for (uint8_t byte : xxh64.digestValue())
-		EXPECT_EQ(byte, bytes[i++]);
+	vector<uint8_t> bytes = {0x3f, 0x5f, 0xc1, 0x78, 0xa8, 0x18, 0x67, 0xe7};
+	EXPECT_EQ(xxh64.digestValue(), bytes);
 }
+
+
+#ifdef ENABLE_XXH128
+TEST(HashFunctionTest, xxh128) {
+	XXH128HashFunction xxh128;
+	ASSERT_EQ(xxh128.digestSize(), 16);
+	xxh128.update("0123456789");
+	EXPECT_EQ(xxh128.digestString(), "e353667619ec664b49655fc9692165fb");
+	xxh128.update("abcdefghij");
+	EXPECT_EQ(xxh128.digestString(), "5f64782bdc987c162389e97fd11aed64");
+	xxh128.reset();
+	xxh128.update("0123456789");
+	EXPECT_EQ(xxh128.digestString(), "e353667619ec664b49655fc9692165fb");
+	vector<uint8_t> bytes = {0xe3, 0x53, 0x66, 0x76, 0x19, 0xec, 0x66, 0x4b, 0x49, 0x65, 0x5F, 0xc9, 0x69, 0x21, 0x65, 0xfb};
+	EXPECT_EQ(xxh128.digestValue(), bytes);
+}
+#endif
 
 
 TEST(HashFunctionTest, createMD5) {
@@ -110,6 +121,20 @@ TEST(HashFunctionTest, createXXH64) {
 	ASSERT_TRUE(dynamic_cast<XXH64HashFunction*>(hashfunc.get()) != nullptr);
 	EXPECT_EQ(hashfunc->digestString(), "3f5fc178a81867e7");
 }
+
+
+#ifdef ENABLE_XXH128
+TEST(HashFunctionTest, createXXH128) {
+	auto hashfunc = HashFunction::create("xxh128");
+	ASSERT_TRUE(dynamic_cast<XXH128HashFunction*>(hashfunc.get()) != nullptr);
+	hashfunc->update("0123456789");
+	EXPECT_EQ(hashfunc->digestString(), "e353667619ec664b49655fc9692165fb");
+
+	hashfunc = HashFunction::create("xxh128", "0123456789");
+	ASSERT_TRUE(dynamic_cast<XXH128HashFunction*>(hashfunc.get()) != nullptr);
+	EXPECT_EQ(hashfunc->digestString(), "e353667619ec664b49655fc9692165fb");
+}
+#endif
 
 
 TEST(HashFunctionTest, createFail) {

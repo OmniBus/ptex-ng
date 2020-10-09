@@ -12,6 +12,7 @@
 #ifndef GMUTEX_H
 #define GMUTEX_H
 
+#include <aconf.h>
 #ifdef _WIN32
 #  include <windows.h>
 #  include <intrin.h>
@@ -68,8 +69,11 @@ static inline GAtomicCounter gAtomicIncrement(GAtomicCounter *counter) {
 
 #if defined(_WIN32)
   newVal = _InterlockedIncrement(counter);
-#elif defined(__GNUC__) // this also works for LLVM/clang
+#elif defined(__GNUC__) || defined(__xlC__)
+  // __GNUC__ also covers LLVM/clang
   newVal = __sync_add_and_fetch(counter, 1);
+#elif defined(__SUNPRO_CC)
+  newVal = atomic_inc_ulong_nv((ulong_t *)counter);
 #else
 #  error "gAtomicIncrement is not defined for this compiler/platform"
 #endif
@@ -83,8 +87,11 @@ static inline GAtomicCounter gAtomicDecrement(GAtomicCounter *counter) {
 
 #if defined(_WIN32)
   newVal = _InterlockedDecrement(counter);
-#elif defined(__GNUC__) // this also works for LLVM/clang
+#elif defined(__GNUC__) || defined(__xlC__)
+  // __GNUC__ also covers LLVM/clang
   newVal = __sync_sub_and_fetch(counter, 1);
+#elif defined(__SUNPRO_CC)
+  newVal = atomic_dec_ulong_nv((ulong_t *)counter);
 #else
 #  error "gAtomicDecrement is not defined for this compiler/platform"
 #endif

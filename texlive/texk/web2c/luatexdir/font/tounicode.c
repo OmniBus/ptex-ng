@@ -287,6 +287,7 @@ static void set_glyph_unicode(char *s, glyph_unicode_entry * gp)
     }
 }
 
+/*
 static void set_cid_glyph_unicode(long index, glyph_unicode_entry * gp, internal_font_number f)
 {
     char *s;
@@ -295,30 +296,39 @@ static void set_cid_glyph_unicode(long index, glyph_unicode_entry * gp, internal
             gp->code = UNI_EXTRA_STRING;
             gp->unicode_seq = xstrdup(s);
         } else {
-            /*tex No fall back as we're providing them ourselves. */
+            // No fall back as we're providing them ourselves.
         }
     } else {
-        /*tex Fall back. */
+        // Fall back
         gp->code = index;
     }
 }
+*/
 
-int write_tounicode(PDF pdf, char **glyph_names, char *name)
+static int do_write_tounicode(PDF pdf, char **glyph_names, char *name, internal_font_number f)
 {
-    char buf[SMALL_BUF_SIZE], *p;
+    char buf[SMALL_BUF_SIZE], *p, *s;
     static char builtin_suffix[] = "-builtin";
     short range_size[257];
     glyph_unicode_entry gtab[257];
     int objnum;
     int i, j;
     int bfchar_count, bfrange_count, subrange_count;
-    assert(strlen(name) + strlen(builtin_suffix) < SMALL_BUF_SIZE);
     if (glyph_unicode_tree == NULL) {
         pdf->gen_tounicode = 0;
         return 0;
     }
-    strcpy(buf, name);
-    if ((p = strrchr(buf, '.')) != NULL && strcmp(p, ".enc") == 0) {
+    if (name == NULL) {
+        strcpy(buf, "no-name");
+    } else {
+        strcpy(buf, name);
+    }
+    if (f) {
+        /*tex
+            Always.
+        */
+        strcat(buf, builtin_suffix);
+    } else if ((p = strrchr(buf, '.')) != NULL && strcmp(p, ".enc") == 0) {
         /*tex
             Strip |.enc| from encoding name.
         */
@@ -330,6 +340,29 @@ int write_tounicode(PDF pdf, char **glyph_names, char *name)
         */
         strcat(buf, builtin_suffix);
     }
+    /*tex Set gtab: */
+    if (f) {
+        int done = 0 ;
+        for (i = 0; i < 256; ++i) {
+            if ((s = get_charinfo_tounicode(char_info(f,(int)i))) != NULL) {
+                gtab[i].code = UNI_EXTRA_STRING;
+                gtab[i].unicode_seq = xstrdup(s);
+                done = 1 ;
+            } else {
+                gtab[i].code = UNI_UNDEF;
+            }
+        }
+        if (! done) {
+            return 0;
+        }
+    } else {
+        for (i = 0; i < 256; ++i) {
+            gtab[i].code = UNI_UNDEF;
+            set_glyph_unicode(glyph_names[i], &gtab[i]);
+        }
+    }
+    gtab[256].code = UNI_UNDEF;
+    /* */
     objnum = pdf_create_obj(pdf, obj_type_others, 0);
     pdf_begin_obj(pdf, objnum, OBJSTM_NEVER);
     pdf_begin_dict(pdf);
@@ -357,12 +390,6 @@ int write_tounicode(PDF pdf, char **glyph_names, char *name)
         "1 begincodespacerange\n"
         "<00> <FF>\n" "endcodespacerange\n",
         buf, buf, buf, buf, buf);
-    /*tex Set gtab: */
-    for (i = 0; i < 256; ++i) {
-        gtab[i].code = UNI_UNDEF;
-        set_glyph_unicode(glyph_names[i], &gtab[i]);
-    }
-    gtab[256].code = UNI_UNDEF;
     /*tex Set |range_size|: */
     for (i = 0; i < 256;) {
         if (gtab[i].code == UNI_STRING || gtab[i].code == UNI_EXTRA_STRING) {
@@ -412,8 +439,7 @@ int write_tounicode(PDF pdf, char **glyph_names, char *name)
         while (range_size[i] <= 1 && i < 256)
             i++;
         assert(i < 256);
-        pdf_printf(pdf, "<%02X> <%02X> <%s>\n", i, i + range_size[i] - 1,
-                   utf16be_str(gtab[i].code));
+        pdf_printf(pdf, "<%02X> <%02X> <%s>\n", i, i + range_size[i] - 1, utf16be_str(gtab[i].code));
         i += range_size[i];
     }
     pdf_printf(pdf, "endbfrange\n");
@@ -465,14 +491,25 @@ int write_tounicode(PDF pdf, char **glyph_names, char *name)
     return objnum;
 }
 
+int write_tounicode(PDF pdf, char **glyph_names, char *name)
+{
+    return do_write_tounicode(pdf, glyph_names, name, 0);
+}
+
+int write_raw_tounicode(PDF pdf, internal_font_number f, char *name)
+{
+    return do_write_tounicode(pdf, NULL, name, f);
+}
+
 int write_cid_tounicode(PDF pdf, fo_entry * fo, internal_font_number f)
 {
     static int range_size[65537];
     static glyph_unicode_entry gtab[65537];
     int objnum;
-    int i, j, k;
+    int i, j, k, tu;
     int bfchar_count, bfrange_count, subrange_count;
     char *buf;
+    char *s;
     buf = xmalloc((unsigned) (strlen(fo->fd->fontname) + 8));
     sprintf(buf, "%s-%s", (fo->fd->subset_tag != NULL ? fo->fd->subset_tag : "UCS"), fo->fd->fontname);
     objnum = pdf_create_obj(pdf, obj_type_others, 0);
@@ -514,7 +551,36 @@ int write_cid_tounicode(PDF pdf, fo_entry * fo, internal_font_number f)
                 if (quick_char_exists(k, i) && char_used(k, i)) {
                     j = char_index(k, i);
                     if (gtab[j].code == UNI_UNDEF) {
+                        /*
                         set_cid_glyph_unicode(i, &gtab[j], f);
+                        */
+                        tu = 0;
+                        /*tex
+                                First look in the instance (new). Ff this fails
+                                us (context) it will go away or become an option.
+                        */
+                        if (font_tounicode(k)) {
+                            tu = 1; /*tex no fallback to index */
+                            if ((s = get_charinfo_tounicode(char_info(k, (int) i))) != NULL) {
+                                gtab[j].code = UNI_EXTRA_STRING;
+                                gtab[j].unicode_seq = xstrdup(s);
+                            }
+                        }
+                        /*tex
+                            Then look in the parent (was default, so one can
+                            still be sparse).
+                        */
+                        if (k != f && gtab[j].code == UNI_UNDEF && font_tounicode(f)) {
+                            tu = 1; /*tex no fallback to index */
+                            if ((s = get_charinfo_tounicode(char_info(f, (int) i))) != NULL) {
+                                gtab[j].code = UNI_EXTRA_STRING;
+                                gtab[j].unicode_seq = xstrdup(s);
+                            }
+                        }
+                        if (! tu) {
+                            /*tex No tonunicode so we map onto index. */
+                            gtab[j].code = i;
+                        }
                     }
                 }
             }

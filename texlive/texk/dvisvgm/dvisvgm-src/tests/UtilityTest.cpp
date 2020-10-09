@@ -2,7 +2,7 @@
 ** UtilityTest.cpp                                                      **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -116,6 +116,17 @@ TEST(UtilityTest, ilog10) {
 		ASSERT_EQ(ilog10(i), static_cast<int>(log10(i))) << "i=" << i;
 		ASSERT_EQ(ilog10(i+1), static_cast<int>(log10(i+1))) << "i=" << i;
 	}
+}
+
+
+TEST(UtilityTest, to_string) {
+	ASSERT_EQ(util::to_string(0), "0");
+	ASSERT_EQ(util::to_string(1), "1");
+	ASSERT_EQ(util::to_string(100), "100");
+	ASSERT_EQ(util::to_string(-1), "-1");
+	ASSERT_EQ(util::to_string(2.123), "2.123");
+	ASSERT_EQ(util::to_string(-2.123), "-2.123");
+	ASSERT_EQ(util::to_string(1.500e-5), "0.000015");
 }
 
 

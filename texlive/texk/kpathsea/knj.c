@@ -1,6 +1,6 @@
 /* knj.c: check for 2-Byte Kanji (CP 932, SJIS) codes.
 
-   Copyright 2010, 2016 Akira Kakuto.
+   Copyright 2010, 2016, 2018 Akira Kakuto.
    Copyright 2013, 2016 TANAKA Takuji.
 
    This library is free software; you can redistribute it and/or
@@ -116,12 +116,44 @@ kpathsea_fsyscp_xfopen (kpathsea kpse, const char *filename, const char *mode)
     FILE *f;
     wchar_t *fnamew, modew[4];
     int i;
+    unsigned char *fnn;
+    unsigned char *p;
+    size_t len;
 
     assert(filename && mode);
-
-    fnamew = get_wstring_from_mbstring(kpse->File_system_codepage, filename, fnamew=NULL);
+    len = strlen(filename);
+/*
+  Support very long input path name, longer than _MAX_PATH for
+  Windows, if it really exists and input name is given in
+  full-absolute path in a command line.
+  /./ , /../, \.\, \..\ should be excluded. (2020/06/06)
+*/
+    fnn = xmalloc(len + 10);
+    p = strstr(filename, ".\\");
+    if (!p) {
+       p = strstr(filename, "./");
+    }
+    if (!p && len > 2 && ((filename[0] == '/' && filename[1] == '/') ||
+        (filename[0] == '\\' && filename[1] == '\\' &&
+         filename[2] != '?'))) {
+       filename += 2;
+       strcpy (fnn, "\\\\?\\UNC\\");
+       strcat (fnn, filename);
+    } else if (!p && len > 2 && filename[1] == ':') {
+       strcpy (fnn, "\\\\?\\");
+       strcat (fnn, filename);
+    } else {
+       strcpy (fnn, filename);
+    }
+    for (p = fnn; *p; p++) {
+      if (*p == '/')
+         *p = '\\';
+    }
+    
+    fnamew = get_wstring_from_mbstring(kpse->File_system_codepage, fnn, fnamew=NULL);
     for(i=0; (modew[i]=(wchar_t)mode[i]); i++) {} /* mode[i] must be ASCII */
     f = _wfopen(fnamew, modew);
+    free (fnn);
     if (f == NULL)
         FATAL_PERROR(filename);
     if (KPATHSEA_DEBUG_P (KPSE_DEBUG_FOPEN)) {
@@ -149,12 +181,44 @@ kpathsea_fsyscp_fopen (kpathsea kpse, const char *filename, const char *mode)
     FILE *f;
     wchar_t *fnamew, modew[4];
     int i;
+    unsigned char *fnn;
+    unsigned char *p;
+    size_t len;
 
     assert(filename && mode);
+    len = strlen(filename);
+/*
+  Support very long input path name, longer than _MAX_PATH for
+  Windows, if it really exists and input name is given in
+  full-absolute path in a command line.
+  /./ , /../, \.\, \..\ should be excluded. (2020/06/06)
+*/
+    fnn = xmalloc(len + 10);
+    p = strstr(filename, ".\\");
+    if (!p) {
+       p = strstr(filename, "./");
+    }
+    if (!p && len > 2 && ((filename[0] == '/' && filename[1] == '/') ||
+        (filename[0] == '\\' && filename[1] == '\\' &&
+         filename[2] != '?'))) {
+       filename += 2;
+       strcpy (fnn, "\\\\?\\UNC\\");
+       strcat (fnn, filename);
+    } else if (!p && len > 2 && filename[1] == ':') {
+       strcpy (fnn, "\\\\?\\");
+       strcat (fnn, filename);
+    } else {
+       strcpy (fnn, filename);
+    }
+    for (p = fnn; *p; p++) {
+      if (*p == '/')
+         *p = '\\';
+    }
 
-    fnamew = get_wstring_from_mbstring(kpse->File_system_codepage, filename, fnamew=NULL);
+    fnamew = get_wstring_from_mbstring(kpse->File_system_codepage, fnn, fnamew=NULL);
     for(i=0; (modew[i]=(wchar_t)mode[i]); i++) {} /* mode[i] must be ASCII */
     f = _wfopen(fnamew, modew);
+    free (fnn);
     if (f != NULL) {
         if (KPATHSEA_DEBUG_P (KPSE_DEBUG_FOPEN)) {
             DEBUGF_START ();
@@ -244,7 +308,12 @@ kpathsea_get_command_line_args_utf8 (kpathsea kpse, const_string enc, int *p_ac,
       hStderr = GetStdHandle( STD_ERROR_HANDLE );
 #endif /* DEBUG */
       kpse->File_system_codepage = CP_UTF8;
+/*
+  IS_KANJI() in the CP932-like system seems to be necessary to
+  support non-ascii values for variables in the case of
+  command_line_encoding = utf-8.
       kpse->Is_cp932_system = 0;
+*/
       argvw = CommandLineToArgvW(GetCommandLineW(), &argcw);
       argc = argcw;
       argv = xmalloc(sizeof(char *)*(argcw+1));

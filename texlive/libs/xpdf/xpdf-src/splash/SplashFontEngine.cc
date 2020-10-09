@@ -112,7 +112,7 @@ SplashFontFile *SplashFontEngine::loadType1Font(SplashFontFileID *idA,
   }
 #endif
 
-#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32)
+#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32) && !defined(__ANDROID__)
   // delete the (temporary) font file -- with Unix hard link
   // semantics, this will remove the last link; otherwise it will
   // return an error, leaving the file to be deleted later (if
@@ -132,10 +132,14 @@ SplashFontFile *SplashFontEngine::loadType1CFont(SplashFontFileID *idA,
 						 char *fileName,
 						 GBool deleteFile,
 #endif
+						 int *codeToGID,
 						 const char **enc) {
   SplashFontFile *fontFile;
 
   fontFile = NULL;
+  if (!fontFile) {
+    gfree(codeToGID);
+  }
 #if HAVE_FREETYPE_H
   if (!fontFile && ftEngine) {
     fontFile = ftEngine->loadType1CFont(idA,
@@ -148,7 +152,7 @@ SplashFontFile *SplashFontEngine::loadType1CFont(SplashFontFileID *idA,
   }
 #endif
 
-#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32)
+#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32) && !defined(__ANDROID__)
   // delete the (temporary) font file -- with Unix hard link
   // semantics, this will remove the last link; otherwise it will
   // return an error, leaving the file to be deleted later (if
@@ -168,10 +172,14 @@ SplashFontFile *SplashFontEngine::loadOpenTypeT1CFont(SplashFontFileID *idA,
 						      char *fileName,
 						      GBool deleteFile,
 #endif
+						      int *codeToGID,
 						      const char **enc) {
   SplashFontFile *fontFile;
 
   fontFile = NULL;
+  if (!fontFile) {
+    gfree(codeToGID);
+  }
 #if HAVE_FREETYPE_H
   if (!fontFile && ftEngine) {
     fontFile = ftEngine->loadOpenTypeT1CFont(idA,
@@ -184,7 +192,7 @@ SplashFontFile *SplashFontEngine::loadOpenTypeT1CFont(SplashFontFileID *idA,
   }
 #endif
 
-#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32)
+#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32) && !defined(__ANDROID__)
   // delete the (temporary) font file -- with Unix hard link
   // semantics, this will remove the last link; otherwise it will
   // return an error, leaving the file to be deleted later (if
@@ -221,7 +229,11 @@ SplashFontFile *SplashFontEngine::loadCIDFont(SplashFontFileID *idA,
   }
 #endif
 
-#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32)
+  if (!fontFile) {
+    gfree(codeToGID);
+  }
+
+#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32) && !defined(__ANDROID__)
   // delete the (temporary) font file -- with Unix hard link
   // semantics, this will remove the last link; otherwise it will
   // return an error, leaving the file to be deleted later (if
@@ -258,7 +270,11 @@ SplashFontFile *SplashFontEngine::loadOpenTypeCFFFont(SplashFontFileID *idA,
   }
 #endif
 
-#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32)
+  if (!fontFile) {
+    gfree(codeToGID);
+  }
+
+#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32) && !defined(__ANDROID__)
   // delete the (temporary) font file -- with Unix hard link
   // semantics, this will remove the last link; otherwise it will
   // return an error, leaving the file to be deleted later (if
@@ -301,7 +317,7 @@ SplashFontFile *SplashFontEngine::loadTrueTypeFont(SplashFontFileID *idA,
     gfree(codeToGID);
   }
 
-#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32)
+#if !LOAD_FONTS_FROM_MEM && !defined(_WIN32) && !defined(__ANDROID__)
   // delete the (temporary) font file -- with Unix hard link
   // semantics, this will remove the last link; otherwise it will
   // return an error, leaving the file to be deleted later (if

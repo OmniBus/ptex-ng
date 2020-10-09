@@ -1,8 +1,8 @@
-#!/usr/bin/env texlua 
+#!/usr/bin/env texlua
 
 --[[
 
-File l3build.lua Copyright (C) 2014-2018 The LaTeX3 Project
+File l3build.lua Copyright (C) 2014-2020 The LaTeX3 Project
 
 It may be distributed and/or modified under the conditions of the
 LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -25,7 +25,7 @@ for those people who are interested.
 --]]
 
 -- Version information
-release_date = "2018-09-26"
+release_date = "2020-06-04"
 
 -- File operations are aided by the LuaFileSystem module
 local lfs = require("lfs")
@@ -37,6 +37,7 @@ local ipairs           = ipairs
 local insert           = table.insert
 local lookup           = kpse.lookup
 local match            = string.match
+local gsub             = string.gsub
 local next             = next
 local print            = print
 local select           = select
@@ -65,6 +66,7 @@ build_require("unpack")
 build_require("manifest")
 build_require("manifest-setup")
 build_require("tagging")
+build_require("upload")
 build_require("stdmain")
 
 -- This has to come after stdmain(),
@@ -95,6 +97,21 @@ end
 -- comes after any user versions
 build_require("variables")
 
+-- Ensure that directories are 'space safe'
+maindir       = escapepath(maindir)
+docfiledir    = escapepath(docfiledir)
+sourcefiledir = escapepath(sourcefiledir)
+supportdir    = escapepath(supportdir)
+testfiledir   = escapepath(testfiledir)
+testsuppdir   = escapepath(testsuppdir)
+builddir      = escapepath(builddir)
+distribdir    = escapepath(distribdir)
+localdir      = escapepath(localdir)
+resultdir     = escapepath(resultdir)
+testdir       = escapepath(testdir)
+typesetdir    = escapepath(typesetdir)
+unpackdir     = escapepath(unpackdir)
+
 -- Tidy up the epoch setting
 -- Force an epoch if set at the command line
 -- Must be done after loading variables, etc.
@@ -111,12 +128,12 @@ check_engines()
 --
 -- Deal with multiple configs for tests
 --
- 
+
 -- When we have specific files to deal with, only use explicit configs
 -- (or just the std one)
 if options["names"] then
   checkconfigs = options["config"] or {stdconfig}
-else 
+else
   checkconfigs = options["config"] or checkconfigs
 end
 
@@ -140,8 +157,10 @@ if options["target"] == "check" then
       for _,config in ipairs(failed) do
         print("Failed tests for configuration " .. config .. ":")
         print("\n  Check failed with difference files")
+        local testdir = testdir
         if config ~= "build" then
-          local testdir = testdir .. "-" .. config
+          resultdir = resultdir .. "-" .. config
+          testdir = testdir .. "-" .. config
         end
         for _,i in ipairs(filelist(testdir,"*" .. os_diffext)) do
           print("  - " .. testdir .. "/" .. i)
@@ -157,11 +176,17 @@ if options["target"] == "check" then
 end
 if #checkconfigs == 1 and
    checkconfigs[1] ~= "build" and
-   (options["target"] == "check" or options["target"] == "save") then
-   local config = "./" .. checkconfigs[1] .. ".lua"
+   (options["target"] == "check" or options["target"] == "save" or options["target"] == "clean") then
+   local config = "./" .. gsub(checkconfigs[1],".lua$","") .. ".lua"
    if fileexists(config) then
+     local savedtestfiledir = testfiledir
      dofile(config)
      testdir = testdir .. "-" .. checkconfigs[1]
+     -- Reset testsuppdir if required
+     if savedtestfiledir ~= testfiledir and
+       testsuppdir == savedtestfiledir .. "/support" then
+       testsuppdir = testfiledir .. "/support"
+     end
    else
      print("Error: Cannot find configuration " ..  checkconfigs[1])
      exit(1)

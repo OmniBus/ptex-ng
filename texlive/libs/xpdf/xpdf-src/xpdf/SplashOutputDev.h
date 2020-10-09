@@ -51,6 +51,7 @@ public:
 		  GBool bitmapTopDownA = gTrue,
 		  GBool allowAntialiasA = gTrue);
 
+
   // Destructor.
   virtual ~SplashOutputDev();
 
@@ -76,6 +77,7 @@ public:
   // Does this device use beginType3Char/endType3Char?  Otherwise,
   // text in Type 3 fonts will be drawn with drawChar/drawString.
   virtual GBool interpretType3Chars() { return gTrue; }
+
 
 
   //----- initialization and control
@@ -267,7 +269,7 @@ private:
   void doUpdateFont(GfxState *state);
   void drawType3Glyph(GfxState *state, T3FontCache *t3Font,
 		      T3FontCacheTag *tag, Guchar *data);
-  static GBool imageMaskSrc(void *data, SplashColorPtr line);
+  static GBool imageMaskSrc(void *data, Guchar *line);
   static GBool imageSrc(void *data, SplashColorPtr colorLine,
 			Guchar *alphaLine);
   static GBool alphaImageSrc(void *data, SplashColorPtr line,
@@ -277,12 +279,14 @@ private:
   static GBool softMaskMatteImageSrc(void *data,
 				     SplashColorPtr colorLine,
 				     Guchar *alphaLine);
+  GString *makeImageTag(Object *ref);
   void reduceImageResolution(Stream *str, double *mat,
 			     int *width, int *height);
   void clearMaskRegion(GfxState *state,
 		       Splash *maskSplash,
 		       double xMin, double yMin,
 		       double xMax, double yMax);
+  void copyState(Splash *oldSplash, GBool copyColors);
 
   SplashColorMode colorMode;
   int bitmapRowPad;
@@ -292,6 +296,7 @@ private:
   GBool allowAntialias;
   GBool vectorAntialias;
   GBool reverseVideo;		// reverse video mode
+  GBool reverseVideoInvertImages;
   SplashColor paperColor;	// paper color
   SplashScreenParams screenParams;
   GBool skipHorizText;

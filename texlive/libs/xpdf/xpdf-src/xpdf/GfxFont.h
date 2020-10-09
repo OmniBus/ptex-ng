@@ -26,6 +26,7 @@ class Dict;
 class CMap;
 class CharCodeToUnicode;
 class FoFiTrueType;
+class FoFiType1C;
 struct GfxFontCIDWidths;
 struct Base14FontMapEntry;
 class FNVHash;
@@ -131,9 +132,10 @@ class GfxFont {
 public:
 
   // Build a GfxFont object.
-  static GfxFont *makeFont(XRef *xref, char *tagA, Ref idA, Dict *fontDict);
+  static GfxFont *makeFont(XRef *xref, const char *tagA,
+			   Ref idA, Dict *fontDict);
 
-  GfxFont(char *tagA, Ref idA, GString *nameA,
+  GfxFont(const char *tagA, Ref idA, GString *nameA,
 	  GfxFontType typeA, Ref embFontIDA);
 
   virtual ~GfxFont();
@@ -243,7 +245,7 @@ protected:
 class Gfx8BitFont: public GfxFont {
 public:
 
-  Gfx8BitFont(XRef *xref, char *tagA, Ref idA, GString *nameA,
+  Gfx8BitFont(XRef *xref, const char *tagA, Ref idA, GString *nameA,
 	      GfxFontType typeA, Ref embFontIDA, Dict *fontDict);
 
   virtual ~Gfx8BitFont();
@@ -273,6 +275,10 @@ public:
   // Return a char code-to-GID mapping for the provided font file.
   // (This is only useful for TrueType fonts.)
   int *getCodeToGIDMap(FoFiTrueType *ff);
+
+  // Return a char code-to-GID mapping for the provided font file.
+  // (This is only useful for Type1C fonts.)
+  int *getCodeToGIDMap(FoFiType1C *ff);
 
   // Return the Type 3 CharProc dictionary, or NULL if none.
   Dict *getCharProcs();
@@ -311,7 +317,7 @@ private:
 class GfxCIDFont: public GfxFont {
 public:
 
-  GfxCIDFont(XRef *xref, char *tagA, Ref idA, GString *nameA,
+  GfxCIDFont(XRef *xref, const char *tagA, Ref idA, GString *nameA,
 	     GfxFontType typeA, Ref embFontIDA, Dict *fontDict);
 
   virtual ~GfxCIDFont();
@@ -331,10 +337,19 @@ public:
   // Get the collection name (<registry>-<ordering>).
   GString *getCollection();
 
+  // Return the horizontal width for <cid>.
+  double getWidth(CID cid);
+
   // Return the CID-to-GID mapping table.  These should only be called
   // if type is fontCIDType2.
   int *getCIDToGID() { return cidToGID; }
   int getCIDToGIDLen() { return cidToGIDLen; }
+
+  // Returns true if this font uses the Identity-H encoding (cmap),
+  // and the Adobe-Identity character collection, and does not have a
+  // CIDToGIDMap.  When this is true for a CID TrueType font, Adobe
+  // appears to treat char codes as raw GIDs.
+  GBool usesIdentityEncoding() { return identityEnc; }
 
   virtual GBool problematicForUnicode();
 
@@ -355,6 +370,7 @@ private:
   int cidToGIDLen;
   GBool hasKnownCollection;
   GBool hasIdentityCIDToGID;
+  GBool identityEnc;
 };
 
 //------------------------------------------------------------------------

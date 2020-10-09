@@ -2,7 +2,7 @@
 //
 // config.h
 //
-// Copyright 1996-2017 Glyph & Cog, LLC
+// Copyright 1996-2019 Glyph & Cog, LLC
 //
 //========================================================================
 
@@ -14,25 +14,25 @@
 //------------------------------------------------------------------------
 
 // xpdf version
-#define xpdfVersion          "4.00"
-#define xpdfVersionNum       4.00
+#define xpdfVersion          "4.02"
+#define xpdfVersionNum       4.02
 #define xpdfMajorVersion     4
-#define xpdfMinorVersion     0
+#define xpdfMinorVersion     2
 #define xpdfUpdateVersion    0
 #define xpdfMajorVersionStr  "4"
-#define xpdfMinorVersionStr  "0"
+#define xpdfMinorVersionStr  "2"
 #define xpdfUpdateVersionStr "0"
 
 // supported PDF version
-#define supportedPDFVersionStr "1.7"
-#define supportedPDFVersionNum 1.7
+#define supportedPDFVersionStr "2.0"
+#define supportedPDFVersionNum 2.0
 
 // copyright notice
-#define xpdfCopyright "Copyright 1996-2017 Glyph & Cog, LLC"
+#define xpdfCopyright "Copyright 1996-2019 Glyph & Cog, LLC"
 
 // Windows resource file stuff
-#define winxpdfVersion "WinXpdf 4.00"
-#define xpdfCopyrightAmp "Copyright 1996-2017 Glyph && Cog, LLC"
+#define winxpdfVersion "WinXpdf 4.02"
+#define xpdfCopyrightAmp "Copyright 1996-2019 Glyph && Cog, LLC"
 
 //------------------------------------------------------------------------
 // paper size

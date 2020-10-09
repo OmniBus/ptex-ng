@@ -1,6 +1,6 @@
 /* This is dvipdfmx, an eXtended version of dvipdfm by Mark A. Wicks.
 
-    Copyright (C) 2002-2018 by Jin-Hwan Cho and Shunsaku Hirata,
+    Copyright (C) 2002-2020 by Jin-Hwan Cho and Shunsaku Hirata,
     the dvipdfmx project team.
     
     Copyright (C) 1998, 1999 by Mark A. Wicks <mwicks@kettering.edu>
@@ -177,7 +177,7 @@ set_fillstyle (double g, double a, int f_ais)
 {
   pdf_obj *dict;
   char     resname[32];
-  char     buf[32];
+  char     buf[256];
   int      alp, len = 0;
 
   if (a > 0.0) {

@@ -1,23 +1,27 @@
-Subject: ANNOUNCE: Xpdf 4.00 - a PDF viewer and related tools
+Subject: ANNOUNCE: Xpdf 4.02 - a PDF viewer and related tools
 
 Glyph & Cog, LLC is pleased to announce a new version of Xpdf, the
 open source Portable Document Format (PDF) viewer.  The Xpdf project
 also includes a PDF text extractor, PDF-to-PostScript converter, and
 various other utilities.
 
-*** The Xpdf web site has moved to www.xpdfreader.com ***
-
 Xpdf uses the Qt toolkit and runs on Linux and Windows.  The
 non-graphical components (pdftops, pdftotext, etc.) run on Linux,
 Unix, Windows, MacOSX, and pretty much any other system with a decent
 C++ compiler.
 
-Major changes:
-* Complete rewrite of the xpdf GUI, using Qt instead of Motif.
-* Multithreaded rasterization in the viewer - pages are now rasterized
-  in a separate thread so that scrolling and other UI activity is not
-  blocked.
-* Added a linear text selection mode.
+4.02 is primarily a bug fix release.  There are some new features:
+
+* Pdftohtml now extracts embedded fonts.
+
+* Various user interface tweaks in XpdfReader: added a button to
+  toggle sidebar visibilty, added menu items to toggle the sidebar and
+  toolbar, added the 'initialDisplayMode', 'initialToolbarState', and
+  'initialSelectMode' xpdfrc settings.
+
+* If XpdfReader is already running, double-clicking on a PDF file (or
+  dragging-and-dropping it on the XpdfReader icon) opens the file in a
+  new tab (via the new '-open' command line switch).
 
 See the `CHANGES' file for a complete list of changes.
 

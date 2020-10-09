@@ -3519,6 +3519,7 @@ else
 fi ;;
 esac
 
+##tldbg KPSE_BASIC: Remember xindy (no-define) as Kpse_Package (for future messages).
 
 if test "`cd $srcdir && pwd`" != "`pwd`"; then
   # Use -I$(srcdir) only when $(srcdir) != ., so that make's output
@@ -5090,7 +5091,11 @@ fi
 $as_echo "$kpse_cv_have_win64" >&6; }
 case $kpse_cv_have_win64 in #(
   yes) :
-    WIN_WRAPPER=w64_wrapper ;; #(
+    if test "x$kpse_cv_have_win32=xmingw"; then :
+  WIN_WRAPPER=w64_mingw_wrapper
+else
+  WIN_WRAPPER=w64_wrapper
+fi ;; #(
   *) :
     WIN_WRAPPER=w32_wrapper ;;
 esac
@@ -6431,7 +6436,9 @@ $as_echo X/"$am_mf" |
     { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
 as_fn_error $? "Something went wrong bootstrapping makefile fragments
-    for automatic dependency tracking.  Try re-running configure with the
+    for automatic dependency tracking.  If GNU make was not used, consider
+    re-running the configure script with MAKE=\"gmake\" (or whatever is
+    necessary).  You can also try re-running configure with the
     '--disable-dependency-tracking' option to at least be able to build
     the package (albeit without support for automatic dependency tracking).
 See \`config.log' for more details" "$LINENO" 5; }

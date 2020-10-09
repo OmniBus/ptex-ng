@@ -22,7 +22,7 @@
 // An Asymptote geometry module.
 
 // THANKS:
-// Special thanks to Olivier Guibé for his help in mathematical issues.
+// Special thanks to Olivier Guibe for his help in mathematical issues.
 
 // BUGS:
 
@@ -30,6 +30,8 @@
 
 import math;
 import markers;
+
+real Infinity=1.0/(1000*realEpsilon);
 
 // A rotation in the direction dir limited to [-90,90]
 // This is useful for rotating text along a line in the direction dir.
@@ -724,6 +726,11 @@ real angle(explicit point M, coordsys R = M.coordsys, bool warn = true)
   return radians(degrees(M, R, warn));
 }
 
+bool Finite(explicit point z)
+{
+  return abs(z.x) < Infinity && abs(z.y) < Infinity;
+}
+
 /*<asyxml><function type="bool" signature="finite(explicit point)"><code></asyxml>*/
 bool finite(explicit point p)
 {/*<asyxml></code><documentation>Avoid to compute 'finite((pair)(infinite_point))'.</documentation></function></asyxml>*/
@@ -752,7 +759,7 @@ real dot(explicit pair A, point B)
 transform rotateO(real a)
 {/*<asyxml></code><documentation>Rotation around the origin of the current coordinate system.</documentation></function></asyxml>*/
   return rotate(a, currentcoordsys.O);
-};
+}
 
 /*<asyxml><function type="transform" signature="projection(point,point)"><code></asyxml>*/
 transform projection(point A, point B)
@@ -1495,7 +1502,7 @@ struct segment
 {/*<asyxml></code><documentation><look href = "struct line"/>.</documentation></asyxml>*/
   restricted point A, B;// Extremity.
   restricted vector u, v;// u = direction vector, v = normal vector.
-  restricted real a, b, c;// Coefficients of the équation ax + by + c = 0
+  restricted real a, b, c;// Coefficients of the equation ax + by + c = 0
   restricted real slope, origin;
   segment copy()
   {
@@ -2477,81 +2484,6 @@ real[] realquarticroots(real a, real b, real c, real d, real e)
   return roots;
 }
 
-/*<asyxml><function type="point[]" signature="intersectionpoints(bqe,bqe)"><code></asyxml>*/
-point[] intersectionpoints(bqe bqe1, bqe bqe2)
-{/*<asyxml></code><documentation>Return the interscetion of the two conic sections whose equations are 'bqe1' and 'bqe2'.</documentation></function></asyxml>*/
-  coordsys R = bqe1.coordsys;
-  bqe lbqe1, lbqe2;
-  real[] a, b;
-  if(R != bqe2.coordsys) {
-    R = currentcoordsys;
-    a = changecoordsys(R, bqe1).a;
-    b = changecoordsys(R, bqe2).a;
-  } else {
-    a = bqe1.a;
-    b = bqe2.a;
-  }
-  static real e = 100 * sqrt(realEpsilon);
-  real[] x, y, c;
-  point[] P;
-  if(abs(a[0]-b[0]) > e || abs(a[1]-b[1]) > e || abs(a[2]-b[2]) > e) {
-    c = new real[] {-2 * a[0]*a[2]*b[0]*b[2]+a[0]*a[2]*b[1]^2 - a[0]*a[1]*b[2]*b[1]+a[1]^2 * b[0]*b[2]-
-                  a[2]*a[1]*b[0]*b[1]+a[0]^2 * b[2]^2 + a[2]^2 * b[0]^2,
-                  -a[2]*a[1]*b[0]*b[4]-a[2]*a[4]*b[0]*b[1]-a[1]*a[3]*b[2]*b[1]+2 * a[0]*a[2]*b[1]*b[4]-
-                  a[0]*a[1]*b[2]*b[4]+a[1]^2 * b[2]*b[3]-2 * a[2]*a[3]*b[0]*b[2]-2 * a[0]*a[2]*b[2]*b[3]+
-                  a[2]*a[3]*b[1]^2 - a[2]*a[1]*b[1]*b[3]+2 * a[1]*a[4]*b[0]*b[2]+2 * a[2]^2 * b[0]*b[3]-
-                  a[0]*a[4]*b[2]*b[1]+2 * a[0]*a[3]*b[2]^2,
-                  -a[3]*a[4]*b[2]*b[1]+a[2]*a[5]*b[1]^2 - a[1]*a[5]*b[2]*b[1]-a[1]*a[3]*b[2]*b[4]+
-                  a[1]^2 * b[2]*b[5]-2 * a[2]*a[3]*b[2]*b[3]+2 * a[2]^2 * b[0]*b[5]+2 * a[0]*a[5]*b[2]^2 + a[3]^2 * b[2]^2-
-                  2 * a[2]*a[5]*b[0]*b[2]+2 * a[1]*a[4]*b[2]*b[3]-a[2]*a[4]*b[1]*b[3]-2 * a[0]*a[2]*b[2]*b[5]+
-                  a[2]^2 * b[3]^2 + 2 * a[2]*a[3]*b[1]*b[4]-a[2]*a[4]*b[0]*b[4]+a[4]^2 * b[0]*b[2]-a[2]*a[1]*b[3]*b[4]-
-                  a[2]*a[1]*b[1]*b[5]-a[0]*a[4]*b[2]*b[4]+a[0]*a[2]*b[4]^2,
-                  -a[4]*a[5]*b[2]*b[1]+a[2]*a[3]*b[4]^2 + 2 * a[3]*a[5]*b[2]^2 - a[2]*a[1]*b[4]*b[5]-
-                  a[2]*a[4]*b[3]*b[4]+2 * a[2]^2 * b[3]*b[5]-2 * a[2]*a[3]*b[2]*b[5]-a[3]*a[4]*b[2]*b[4]-
-                  2 * a[2]*a[5]*b[2]*b[3]-a[2]*a[4]*b[1]*b[5]+2 * a[1]*a[4]*b[2]*b[5]-a[1]*a[5]*b[2]*b[4]+
-                  a[4]^2 * b[2]*b[3]+2 * a[2]*a[5]*b[1]*b[4],
-                  -2 * a[2]*a[5]*b[2]*b[5]+a[4]^2 * b[2]*b[5]+a[5]^2 * b[2]^2 - a[4]*a[5]*b[2]*b[4]+a[2]*a[5]*b[4]^2+
-                  a[2]^2 * b[5]^2 - a[2]*a[4]*b[4]*b[5]};
-    x = realquarticroots(c[0], c[1], c[2], c[3], c[4]);
-  } else {
-    if(abs(b[4]-a[4]) > e){
-      real D = (b[4]-a[4])^2;
-      c = new real[] {(a[0]*b[4]^2 + (-a[1]*b[3]-2 * a[0]*a[4]+a[1]*a[3]) * b[4]+a[2]*b[3]^2+
-                     (a[1]*a[4]-2 * a[2]*a[3]) * b[3]+a[0]*a[4]^2 - a[1]*a[3]*a[4]+a[2]*a[3]^2)/D,
-                    -((a[1]*b[4]-2 * a[2]*b[3]-a[1]*a[4]+2 * a[2]*a[3]) * b[5]-a[3]*b[4]^2 + (a[4]*b[3]-a[1]*a[5]+a[3]*a[4]) * b[4]+(2 * a[2]*a[5]-a[4]^2) * b[3]+(a[1]*a[4]-2 * a[2]*a[3]) * a[5])/D,
-                    a[2]*(a[5]-b[5])^2/D + a[4]*(a[5]-b[5])/(b[4]-a[4]) + a[5]};
-      x = quadraticroots(c[0], c[1], c[2]);
-    } else {
-      if(abs(a[3]-b[3]) > e) {
-        real D = b[3]-a[3];
-        c = new real[] {a[2], (-a[1]*b[5] + a[4]*b[3] + a[1]*a[5] - a[3]*a[4])/D,
-                      a[0]*(a[5]-b[5])^2/D^2 + a[3]*(a[5]-b[5])/D + a[5]};
-        y = quadraticroots(c[0], c[1], c[2]);
-        for (int i = 0; i < y.length; ++i) {
-          c = new real[] {a[0], a[1]*y[i]+a[3], a[2]*y[i]^2 + a[4]*y[i]+a[5]};
-          x = quadraticroots(c[0], c[1], c[2]);
-          for (int j = 0; j < x.length; ++j) {
-            if(abs(b[0]*x[j]^2 + b[1]*x[j]*y[i]+b[2]*y[i]^2 + b[3]*x[j]+b[4]*y[i]+b[5]) < 1e-5)
-              P.push(point(R, (x[j], y[i])));
-          }
-        }
-        return P;
-      } else {
-        if(abs(a[5]-b[5]) < e) abort("intersectionpoints: intersection of identical conics.");
-      }
-    }
-  }
-  for (int i = 0; i < x.length; ++i) {
-    c = new real[] {a[2], a[1]*x[i]+a[4], a[0]*x[i]^2 + a[3]*x[i]+a[5]};
-    y = quadraticroots(c[0], c[1], c[2]);
-    for (int j = 0; j < y.length; ++j) {
-      if(abs(b[0]*x[i]^2 + b[1]*x[i]*y[j]+b[2]*y[j]^2 + b[3]*x[i]+b[4]*y[j]+b[5]) < 1e-5)
-        P.push(point(R, (x[i], y[j])));
-    }
-  }
-  return P;
-}
-
 /*<asyxml><struct signature="conic"><code></asyxml>*/
 struct conic
 {/*<asyxml></code><documentation></documentation><property type = "real" signature="e,p,h"><code></asyxml>*/
@@ -2616,17 +2548,18 @@ struct ellipse
   /*<asyxml><property type = "point" signature="F1,F2,C"><code></asyxml>*/
   restricted point F1,F2,C;/*<asyxml></code><documentation>Foci and center.</documentation></property><property type = "real" signature="a,b,c,e,p"><code></asyxml>*/
   restricted real a,b,c,e,p;/*<asyxml></code></property><property type = "real" signature="angle"><code></asyxml>*/
-  restricted real angle;/*<asyxml></code><documentation>Value is degrees(F1 - F2).</documentation></property><property type = "line" signature="D1,D2"><code></asyxml>*/
+  restricted real angle;/*<asyxml></code><documentation>Value is degrees(F2 - F1).</documentation></property><property type = "line" signature="D1,D2"><code></asyxml>*/
   restricted line D1,D2;/*<asyxml></code><documentation>Directrices.</documentation></property><property type = "line" signature="l"><code></asyxml>*/
   line l;/*<asyxml></code><documentation>If one axis is infinite, this line is used instead of ellipse.</documentation></property></asyxml>*/
+
   /*<asyxml><method type = "void" signature="init(point,point,real)"><code></asyxml>*/
   void init(point f1, point f2, real a)
-  {/*<asyxml></code><documentation>Ellipse given by foci and semimajor axis</documentation></method></asyxml>*/
+  {/*<asyxml></code><documentation>Ellipse given by foci and semimajor axis.</documentation></method></asyxml>*/
     point[] P = standardizecoordsys(f1, f2);
     this.F1 = P[0];
     this.F2 = P[1];
-    this.angle = abs(P[1]-P[0]) < 10 * epsgeo ? 0 : degrees(P[1]-P[0]);
     this.C = (P[0] + P[1])/2;
+    this.angle = degrees(F2 - F1, warn=false);
     this.a = a;
     if(!finite(a)) {
       this.l = line(P[0], P[1]);
@@ -2650,7 +2583,7 @@ struct ellipse
 
 bool degenerate(ellipse el)
 {
-  return (!finite(el.a) || !finite(el.b));
+  return !finite(el.a) || !finite(el.b);
 }
 
 /*<asyxml><struct signature="parabola"><code></asyxml>*/
@@ -2658,7 +2591,7 @@ struct parabola
 {/*<asyxml></code><documentation>Look at <html><a href = "http://mathworld.wolfram.com/Parabola.html">http://mathworld.wolfram.com/Parabola.html</a></html></documentation><property type = "point" signature="F,V"><code></asyxml>*/
   restricted point F,V;/*<asyxml></code><documentation>Focus and vertex</documentation></property><property type = "real" signature="a,p,e = 1"><code></asyxml>*/
   restricted real a,p,e = 1;/*<asyxml></code></property><property type = "real" signature="angle"><code></asyxml>*/
-  restricted real angle;/*<asyxml></code><documentation>Angle, in degrees, of the line (FV).</documentation></property><property type = "line" signature="D"><code></asyxml>*/
+  restricted real angle;/*<asyxml></code><documentation>Value is degrees(F - V).</documentation></property><property type = "line" signature="D"><code></asyxml>*/
   restricted line D;/*<asyxml></code><documentation>Directrix</documentation></property><property type = "pair" signature="bmin,bmax"><code></asyxml>*/
   pair bmin, bmax;/*<asyxml></code><documentation>The (left, bottom) and (right, top) coordinates of region bounding box for drawing the parabola.
                     If unset the current picture bounding box is used instead.</documentation></property></asyxml>*/
@@ -2667,13 +2600,13 @@ struct parabola
   void init(point F, line directrix)
   {/*<asyxml></code><documentation>Parabola given by focus and directrix.</documentation></method></asyxml>*/
     point[] P = standardizecoordsys(F, directrix.A, directrix.B);
-    line l = line(P[1], P[2]);
     this.F = P[0];
+    line l = line(P[1], P[2]);
     this.D = l;
     this.a = distance(P[0], l)/2;
     this.p = 2 * a;
     this.V = 0.5 * (F + projection(D) * P[0]);
-    this.angle = degrees(F - V);
+    this.angle = degrees(F - V, warn=false);
   }
 }/*<asyxml></struct></asyxml>*/
 
@@ -2683,7 +2616,7 @@ struct hyperbola
   restricted point F1,F2;/*<asyxml></code><documentation>Foci.</documentation></property><property type = "point" signature="C,V1,V2"><code></asyxml>*/
   restricted point C,V1,V2;/*<asyxml></code><documentation>Center and vertices.</documentation></property><property type = "real" signature="a,b,c,e,p"><code></asyxml>*/
   restricted real a,b,c,e,p;/*<asyxml></code><documentation></documentation></property><property type = "real" signature="angle"><code></asyxml>*/
-  restricted real angle;/*<asyxml></code><documentation>Angle,in degrees,of the line (F1F2).</documentation></property><property type = "line" signature="D1,D2,A1,A2"><code></asyxml>*/
+  restricted real angle;/*<asyxml></code><documentation>Value is degrees(F2 - F1).</documentation></property><property type = "line" signature="D1,D2,A1,A2"><code></asyxml>*/
   restricted line D1,D2,A1,A2;/*<asyxml></code><documentation>Directrices and asymptotes.</documentation></property><property type = "pair" signature="bmin,bmax"><code></asyxml>*/
   pair bmin, bmax; /*<asyxml></code><documentation>The (left, bottom) and (right, top) coordinates of region bounding box for drawing the hyperbola.
                      If unset the current picture bounding box is used instead.</documentation></property></asyxml>*/
@@ -2694,9 +2627,9 @@ struct hyperbola
     point[] P = standardizecoordsys(f1, f2);
     this.F1 = P[0];
     this.F2 = P[1];
-    this.angle = degrees(F2 - F1);
-    this.a = a;
     this.C = (P[0] + P[1])/2;
+    this.angle = degrees(F2 - F1, warn=false);
+    this.a = a;
     this.c = abs(C - P[0]);
     this.e = this.c/a;
     if(this.e <= 1) abort("hyperbola.init: wrong parameter: e <= 1.");
@@ -2957,7 +2890,6 @@ hyperbola hyperbola(point P1, point P2, real ae, bool byfoci = byfoci)
 /*<asyxml><function type="ellipse" signature="ellipse(point,point,point)"><code></asyxml>*/
 ellipse ellipse(point F1, point F2, point M)
 {/*<asyxml></code><documentation>Return the ellipse passing through 'M' whose the foci are 'F1' and 'F2'.</documentation></function></asyxml>*/
-  point P[] = standardizecoordsys(false, F1, F2, M);
   real a = abs(F1 - M) + abs(F2 - M);
   return ellipse(F1, F2, finite(a) ? a/2 : a);
 }
@@ -3159,6 +3091,13 @@ parabola parabola(point M1, point M2, point M3, point M4, point M5)
   return parabola(bqe(M1, M2, M3, M4, M5));
 }
 
+/*<asyxml><function type="hyperbola" signature="hyperbola(point,point,point)"><code></asyxml>*/
+hyperbola hyperbola(point F1, point F2, point M)
+{/*<asyxml></code><documentation>Return the hyperbola passing through 'M' whose the foci are 'F1' and 'F2'.</documentation></function></asyxml>*/
+  real a = abs(abs(F1 - M) - abs(F2 - M));
+  return hyperbola(F1, F2, finite(a) ? a/2 : a);
+}
+
 /*<asyxml><function type="hyperbola" signature="hyperbola(point,real,real,real)"><code></asyxml>*/
 hyperbola hyperbola(point C, real a, real b, real angle = 0)
 {/*<asyxml></code><documentation>Return the hyperbola centered at 'C' with semimajor axis 'a' along C--C + dir(angle),
@@ -3350,7 +3289,7 @@ ellipse operator cast(circle c)
 }
 
 /*<asyxml><operator type = "circle" signature="cast(ellipse)"><code></asyxml>*/
-circle operator cast(ellipse el)
+circle operator ecast(ellipse el)
 {/*<asyxml></code><documentation></documentation></operator></asyxml>*/
   circle oc;
   bool infb = (!finite(el.a) || !finite(el.b));
@@ -3362,7 +3301,7 @@ circle operator cast(ellipse el)
 }
 
 /*<asyxml><operator type = "ellipse" signature="cast(conic)"><code></asyxml>*/
-ellipse operator cast(conic co)
+ellipse operator ecast(conic co)
 {/*<asyxml></code><documentation>Cast a conic to an ellipse (can be a circle).</documentation></operator></asyxml>*/
   if(degenerate(co) && co.e < 1) return ellipse(co.l[0].A, co.l[0].B, infinity);
   ellipse oe;
@@ -3380,7 +3319,7 @@ ellipse operator cast(conic co)
 }
 
 /*<asyxml><operator type = "parabola" signature="cast(conic)"><code></asyxml>*/
-parabola operator cast(conic co)
+parabola operator ecast(conic co)
 {/*<asyxml></code><documentation>Cast a conic to a parabola.</documentation></operator></asyxml>*/
   parabola op;
   if(abs(co.e - 1) > epsgeo) abort("casting: The conic section is not a parabola.");
@@ -3395,7 +3334,7 @@ conic operator cast(parabola p)
 }
 
 /*<asyxml><operator type = "hyperbola" signature="cast(conic)"><code></asyxml>*/
-hyperbola operator cast(conic co)
+hyperbola operator ecast(conic co)
 {/*<asyxml></code><documentation>Cast a conic section to an hyperbola.</documentation></operator></asyxml>*/
   hyperbola oh;
   if(co.e > 1) {
@@ -3447,7 +3386,7 @@ conic operator cast(circle c)
 }
 
 /*<asyxml><operator type = "circle" signature="cast(conic)"><code></asyxml>*/
-circle operator cast(conic c)
+circle operator ecast(conic c)
 {/*<asyxml></code><documentation>Conic section to circle.</documentation></operator></asyxml>*/
   ellipse el = (ellipse)c;
   circle oc;
@@ -3663,7 +3602,7 @@ bqe equation(parabola p)
    bqe.a[0] * x^2 + bqe.a[1] * x * y + bqe.a[2] * y^2 + bqe.a[3] * x + bqe.a[4] * y + bqe.a[5] = 0
    One can change the coordinate system of 'bqe' using the routine 'changecoordsys'.</documentation></function></asyxml>*/
   coordsys R = canonicalcartesiansystem(p);
-  parabola tp = changecoordsys(R, p);
+  parabola tp = (parabola) changecoordsys(R, p);
   point A = projection(tp.D) * point(R, (0, 0));
   real a = abs(A);
   return changecoordsys(coordsys(p),
@@ -6563,14 +6502,14 @@ point[] intersectionpoints(line l, ellipse el)
   coordsys R = samecoordsys(l.A, el.C) ? l.A.coordsys : defaultcoordsys;
   coordsys Rp = defaultcoordsys;
   line ll = changecoordsys(Rp, l);
-  ellipse ell = changecoordsys(Rp, el);
+  ellipse ell = (ellipse) changecoordsys(Rp, el);
   circle C = circle(ell.C, ell.a);
   point[] Ip = intersectionpoints(ll, C);
   if (Ip.length > 0 &&
       (perpendicular(ll, line(ell.F1, Ip[0])) ||
        perpendicular(ll, line(ell.F2, Ip[0])))) {
     // http://www.mathcurve.com/courbes2d/ellipse/ellipse.shtml
-    //  Définition tangentielle par antipodaire de cercle.
+    // Definition of the tangent at the antipodal point on the circle.
     // 'l' is a tangent of 'el'
     transform t = scale(el.a/el.b, el.F1, el.F2, el.C, rotate(90, el.C) * el.F1);
     point inter = inverse(t) * intersectionpoints(C, t * ll)[0];
@@ -6637,7 +6576,7 @@ point[] intersectionpoints(line l, hyperbola h)
   coordsys R = coordsys(h);
   point A = intersectionpoint(l, h.A1), B = intersectionpoint(l, h.A2);
   point M = midpoint(segment(A, B));
-  bool tgt = M @ h;
+  bool tgt = Finite(M) ? M @ h : false;
   if(tgt) {
     if(M @ l) op.push(M);
   } else {
@@ -6672,6 +6611,74 @@ point[] intersectionpoints(line l, conic co)
 point[] intersectionpoints(conic co, line l)
 {
   return intersectionpoints(l, co);
+}
+
+/*<asyxml><function type="point[]" signature="intersectionpoints(bqe,bqe)"><code></asyxml>*/
+point[] intersectionpoints(bqe bqe1, bqe bqe2)
+{/*<asyxml></code><documentation>Return the intersection of the two conic sections whose equations are 'bqe1' and 'bqe2'.</documentation></function></asyxml>*/
+  coordsys R=canonicalcartesiansystem(conic(bqe1));
+  real[] a=changecoordsys(R,bqe1).a;
+  real[] b=changecoordsys(R,bqe2).a;
+
+  static real e=100 * sqrt(realEpsilon);
+  real[] x,y,c;
+  point[] P;
+  if(abs(a[0]-b[0]) > e || abs(a[1]-b[1]) > e || abs(a[2]-b[2]) > e) {
+    c=new real[] {a[0]*a[2]*(-2*b[0]*b[2]+b[1]^2)+a[0]^2*b[2]^2+a[2]^2*b[0]^2,
+
+                  2*a[0]*a[2]*b[1]*b[4]-2*a[2]*a[3]*b[0]*b[2]
+                  -2*a[0]*a[2]*b[2]*b[3]+a[2]*a[3]*b[1]^2+2*a[2]^2*b[0]*b[3],
+
+                  a[2]*a[5]*b[1]^2-2*a[2]*a[3]*b[2]*b[3]+2*a[2]^2*b[0]*b[5]
+                  +2*a[0]*a[5]*b[2]^2+a[3]^2*b[2]^2-2*a[2]*a[5]*b[0]*b[2]
+                  -2*a[0]*a[2]*b[2]*b[5]+a[2]^2*b[3]^2+2*a[2]*a[3]*b[1]*b[4]
+                  +a[0]*a[2]*b[4]^2,
+
+                  a[2]*a[3]*b[4]^2+2*a[2]^2*b[3]*b[5]-2*a[2]*a[3]*b[2]*b[5]
+                  -2*a[2]*a[5]*b[2]*b[3]+2*a[2]*a[5]*b[1]*b[4],
+
+                  -2*a[2]*a[5]*b[2]*b[5]+a[5]^2*b[2]^2+a[2]*a[5]*b[4]^2
+                  +a[2]^2*b[5]^2};
+    x=realquarticroots(c[0],c[1],c[2],c[3],c[4]);
+  } else {
+    if(abs(b[4]) > e) {
+      real D=b[4]^2;
+      c=new real[] {(a[0]*b[4]^2+a[2]*b[3]^2+
+                       (-2*a[2]*a[3])*b[3]+a[2]*a[3]^2)/D,
+                    -((-2*a[2]*b[3]+2*a[2]*a[3])*b[5]-a[3]*b[4]^2+
+                      (2*a[2]*a[5])*b[3])/D,a[2]*(a[5]-b[5])^2/D+a[5]};
+      x=quadraticroots(c[0],c[1],c[2]);
+    } else {
+      if(abs(a[3]-b[3]) > e) {
+        real D=b[3]-a[3];
+        c=new real[] {a[2],0,a[0]*(a[5]-b[5])^2/D^2-a[3]*b[5]/D+a[5]};
+        y=quadraticroots(c[0],c[1],c[2]);
+        for(int i=0; i < y.length; ++i) {
+          c=new real[] {a[0],a[3],a[2]*y[i]^2+a[5]};
+          x=quadraticroots(c[0],c[1],c[2]);
+          for(int j=0; j < x.length; ++j) {
+            if(abs(b[0]*x[j]^2+b[1]*x[j]*y[i]+b[2]*y[i]^2+b[3]*x[j]
+                   +b[4]*y[i]+b[5]) < 1e-5)
+              P.push(changecoordsys(currentcoordsys,point(R,(x[j],y[i]))));
+          }
+        }
+        return P;
+      } else {
+        if(abs(a[5]-b[5]) < e)
+          abort("intersectionpoints: intersection of identical conics.");
+      }
+    }
+  }
+  for(int i=0; i < x.length; ++i) {
+    c=new real[] {a[2],0,a[0]*x[i]^2+a[3]*x[i]+a[5]};
+    y=quadraticroots(c[0],c[1],c[2]);
+    for(int j=0; j < y.length; ++j) {
+      if(abs(b[0]*x[i]^2+b[1]*x[i]*y[j]+b[2]*y[j]^2+b[3]*x[i]+b[4]*y[j]+b[5])
+         < 1e-5)
+        P.push(changecoordsys(currentcoordsys,point(R,(x[i],y[j]))));
+    }
+  }
+  return P;
 }
 
 /*<asyxml><function type="point[]" signature="intersectionpoints(conic,conic)"><code></asyxml>*/
@@ -7047,7 +7054,7 @@ arc arccircle(point A, point M, point B)
   real m = degrees(M - tc.C);
 
   arc oa = arc(tc, a, b);
-  // TODO : use cross product to determine CWW or CW
+  // TODO: use cross product to determine CWW or CW
   if (!(M @ oa)) {
     oa.direction = !oa.direction;
   }
@@ -7190,3 +7197,4 @@ path arc(explicit pair B, explicit pair A, explicit pair C, real r)
 
 // *........................FOOTER.........................*
 // *=======================================================*
+

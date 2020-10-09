@@ -345,15 +345,36 @@ subtype_info node_subtypes_marginkern[] = {
 };
 
 subtype_info node_subtypes_list[] = {
-    { unknown_list,         NULL, 0 },
-    { line_list,            NULL, 0 },
-    { hbox_list,            NULL, 0 },
-    { indent_list,          NULL, 0 },
-    { align_row_list,       NULL, 0 },
-    { align_cell_list,      NULL, 0 },
-    { equation_list,        NULL, 0 },
-    { equation_number_list, NULL, 0 },
-    { -1,                   NULL, 0 },
+    { unknown_list,              NULL, 0 },
+    { line_list,                 NULL, 0 },
+    { hbox_list,                 NULL, 0 },
+    { indent_list,               NULL, 0 },
+    { align_row_list,            NULL, 0 },
+    { align_cell_list,           NULL, 0 },
+    { equation_list,             NULL, 0 },
+    { equation_number_list,      NULL, 0 },
+    { math_list_list,            NULL, 0 },
+    { math_char_list,            NULL, 0 },
+    { math_h_extensible_list,    NULL, 0 },
+    { math_v_extensible_list,    NULL, 0 },
+    { math_h_delimiter_list,     NULL, 0 },
+    { math_v_delimiter_list,     NULL, 0 },
+    { math_over_delimiter_list,  NULL, 0 },
+    { math_under_delimiter_list, NULL, 0 },
+    { math_numerator_list,       NULL, 0 },
+    { math_denominator_list,     NULL, 0 },
+    { math_limits_list,          NULL, 0 },
+    { math_fraction_list,        NULL, 0 },
+    { math_nucleus_list,         NULL, 0 },
+    { math_sup_list,             NULL, 0 },
+    { math_sub_list,             NULL, 0 },
+    { math_degree_list,          NULL, 0 },
+    { math_scripts_list,         NULL, 0 },
+    { math_over_list,            NULL, 0 },
+    { math_under_list,           NULL, 0 },
+    { math_accent_list,          NULL, 0 },
+    { math_radical_list,         NULL, 0 },
+    { -1,                        NULL, 0 },
 };
 
 subtype_info node_subtypes_adjust[] = {
@@ -610,14 +631,35 @@ void l_set_node_data(void) {
     init_node_key(node_subtypes_fence, right_noad_side,  right)
     init_node_key(node_subtypes_fence, no_noad_side,     no)
 
-    init_node_key(node_subtypes_list, unknown_list,         unknown)
-    init_node_key(node_subtypes_list, line_list,            line)
-    init_node_key(node_subtypes_list, hbox_list,            box)
-    init_node_key(node_subtypes_list, indent_list,          indent)
-    init_node_key(node_subtypes_list, align_row_list,       alignment)
-    init_node_key(node_subtypes_list, align_cell_list,      cell)
-    init_node_key(node_subtypes_list, equation_list,        equation)
-    init_node_key(node_subtypes_list, equation_number_list, equationnumber)
+    init_node_key(node_subtypes_list, unknown_list,              unknown)
+    init_node_key(node_subtypes_list, line_list,                 line)
+    init_node_key(node_subtypes_list, hbox_list,                 box)
+    init_node_key(node_subtypes_list, indent_list,               indent)
+    init_node_key(node_subtypes_list, align_row_list,            alignment)
+    init_node_key(node_subtypes_list, align_cell_list,           cell)
+    init_node_key(node_subtypes_list, equation_list,             equation)
+    init_node_key(node_subtypes_list, equation_number_list,      equationnumber)
+    init_node_key(node_subtypes_list, math_list_list,            math)
+    init_node_key(node_subtypes_list, math_char_list,            mathchar)
+    init_node_key(node_subtypes_list, math_h_extensible_list,    hextensible)
+    init_node_key(node_subtypes_list, math_v_extensible_list,    vextensible)
+    init_node_key(node_subtypes_list, math_h_delimiter_list,     hdelimiter)
+    init_node_key(node_subtypes_list, math_v_delimiter_list,     vdelimiter)
+    init_node_key(node_subtypes_list, math_over_delimiter_list,  overdelimiter)
+    init_node_key(node_subtypes_list, math_under_delimiter_list, underdelimiter)
+    init_node_key(node_subtypes_list, math_numerator_list,       numerator)
+    init_node_key(node_subtypes_list, math_denominator_list,     denominator)
+    init_node_key(node_subtypes_list, math_limits_list,          limits)
+    init_node_key(node_subtypes_list, math_fraction_list,        fraction)
+    init_node_key(node_subtypes_list, math_nucleus_list,         nucleus)
+    init_node_key(node_subtypes_list, math_sup_list,             sup)
+    init_node_key(node_subtypes_list, math_sub_list,             sub)
+    init_node_key(node_subtypes_list, math_degree_list,          degree)
+    init_node_key(node_subtypes_list, math_scripts_list,         scripts)
+    init_node_key(node_subtypes_list, math_over_list,            over)
+    init_node_key(node_subtypes_list, math_under_list,           under)
+    init_node_key(node_subtypes_list, math_accent_list,          accent)
+    init_node_key(node_subtypes_list, math_radical_list,         radical)
 
     init_node_key(node_subtypes_math, before, beginmath)
     init_node_key(node_subtypes_math, after,  endmath)
@@ -2178,7 +2220,7 @@ static void flush_node_wrapup_core(halfword p)
             case 'd':
                 break;
             case 'l':
-                free_user_lua(user_node_value(p));
+                free_user_lua(p);
                 break;
             case 'n':
                 flush_node_list(user_node_value(p));
@@ -2457,6 +2499,7 @@ static void check_node_wrapup_core(halfword p)
                     break;
                 case 's':
                 case 'd':
+                case 'l':
                     break;
                 default:
                     confusion("unknown user node type");
@@ -4432,7 +4475,16 @@ halfword new_char(int f, int c)
     \.{\\rightghost}, respectively. They are going to be removed by
     |new_ligkern|, at the end of which they are no longer needed.
 
-    Here are a few handy helpers used by the list output routines.
+    Here are a few handy helpers used by the list output routines. The yoffset
+    has some history but we now give some control over its treatment:
+
+    0: what we had before
+    1: compensate height and depth
+    2: compensate height and depth, take max
+    3: we keep height and depth
+
+    The modes are controlled by a variable because we need to retain downward
+    compatibility.
 
 */
 
@@ -4444,20 +4496,24 @@ scaled glyph_width(halfword p)
 
 scaled glyph_height(halfword p)
 {
-    scaled w = char_height(font(p), character(p)) + y_displace(p);
-    if (w < 0)
-        w = 0;
-    return w;
+    scaled h = char_height(font(p), character(p));
+    scaled y = y_displace(p);
+    if ((glyph_dimensions_par == 0) || (glyph_dimensions_par == 1) || (glyph_dimensions_par == 2 && y > 0))
+        h += y;
+    if (h < 0)
+        h = 0;
+    return h;
 }
 
-scaled glyph_depth(halfword p)
+scaled glyph_depth(halfword p) /* not used */
 {
-    scaled w = char_depth(font(p), character(p));
-    if (y_displace(p) > 0)
-        w = w - y_displace(p);
-    if (w < 0)
-        w = 0;
-    return w;
+    scaled d = char_depth(font(p), character(p));
+    scaled y = y_displace(p);
+    if ((glyph_dimensions_par == 0 && y > 0) || (glyph_dimensions_par == 1) || (glyph_dimensions_par == 2 && y < 0))
+        d -= y;
+    if (d < 0)
+        d = 0;
+    return d;
 }
 
 /*tex
@@ -4732,7 +4788,7 @@ halfword make_local_par_node(int mode)
 {
     int callback_id;
     halfword q;
-    halfword p = new_node(local_par_node,0);
+    halfword p = new_node(local_par_node,mode);
     local_pen_inter(p) = local_inter_line_penalty_par;
     local_pen_broken(p) = local_broken_penalty_par;
     if (local_left_box_par != null) {

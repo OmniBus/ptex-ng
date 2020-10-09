@@ -2,8 +2,8 @@
 #
 # cjk-gs-integrate - setup Ghostscript for CID/TTF CJK fonts
 #
-# Copyright 2015-2018 by Norbert Preining
-# Copyright 2016-2018 by Japanese TeX Development Community
+# Copyright 2015-2020 by Norbert Preining
+# Copyright 2016-2020 by Japanese TeX Development Community
 #
 # This work is based on research and work by (in alphabetical order)
 #   Yusuke Kuroki
@@ -39,7 +39,7 @@ use Cwd 'abs_path';
 use strict;
 
 (my $prg = basename($0)) =~ s/\.pl$//;
-my $version = '20180306.0';
+my $version = '20200307.0';
 
 if (win32()) {
   # conversion between internal (utf-8) and console (cp932):
@@ -97,6 +97,7 @@ my %encode_list = (
     Adobe-Japan1-4
     Adobe-Japan1-5
     Adobe-Japan1-6
+    Adobe-Japan1-7
     EUC-H
     EUC-V
     Ext-H
@@ -297,6 +298,7 @@ my $opt_listallaliases = 0;
 my $opt_listfonts = 0;
 my $opt_info = 0;
 my $opt_machine = 0;
+my $opt_strictpsname = 0;
 my $dry_run = 0;
 my $opt_quiet = 0;
 my $opt_debug = 0;
@@ -323,6 +325,7 @@ if (! GetOptions(
         "list-fonts"       => \$opt_listfonts,
         "info"             => \$opt_info,
         "machine-readable" => \$opt_machine,
+        "strict-psname"    => \$opt_strictpsname, # hidden option for debugging
         "n|dry-run"        => \$dry_run,
         "q|quiet"          => \$opt_quiet,
         "d|debug+"         => \$opt_debug,
@@ -345,20 +348,32 @@ if ($opt_help || $opt_markdown) {
   exit(0);
 }
 
+# check for the existence of kpsewhich, otherwise we cannot do anything
+if (system("kpsewhich --version >$nul 2>&1 <$nul" ) != 0) {
+  print_error("We need `kpsewhich' being installed! Exiting.\n");
+  exit(1);
+}
+
 if ($opt_debug >= 2) {
   require Data::Dumper;
   $Data::Dumper::Indent = 1;
 }
 
-my $otfinfo_available;
-chomp(my $otfinfo_help = `otfinfo --help 2>$nul`);
+my $zrlistttc = kpse_miscfont("zrlistttc.lua");
+my $zrlistttc_available;
+chomp(my $zrlistttc_help = `texlua $zrlistttc 2>$nul`);
 if ($?) {
-  print_warning("The program 'otfinfo' not found in PATH.\n");
-  print_warning("Sorry, we can't be safe enough to distinguish\n");
-  print_warning("uppercase / lowercase file names.\n");
-  $otfinfo_available = 0;
+  if ($opt_strictpsname) {
+    print_error("The script 'zrlistttc.lua' not found, cannot proceed!\n");
+    exit(1);
+  }
+  # show info only for debugging
+  print_debug("The script 'zrlistttc.lua' not found.\n");
+  print_debug("Sorry, we can't be safe enough to distinguish\n");
+  print_debug("uppercase / lowercase file names.\n");
+  $zrlistttc_available = 0;
 } else {
-  $otfinfo_available = 1;
+  $zrlistttc_available = 1;
 }
 
 if (macosx()) {
@@ -524,7 +539,7 @@ sub main {
   }
 
   # do actual setup/removing operations
-  if (! $opt_output) {
+  if (!$opt_output) {
     print_info("searching for Ghostscript resource\n");
     my $gsres = find_gs_resource();
     if (!$gsres) {
@@ -555,11 +570,16 @@ sub main {
       print_info(($opt_remove ? "removing" : "generating") . " links, snippets and cidfmap.local for non-CID fonts ...\n");
       do_nonotf_fonts();
     }
-    write_winbatch() if ($opt_winbatch);
+    write_winbatch() if $opt_winbatch;
   }
   print_info(($opt_remove ? "removing" : "generating") . " snippets and cidfmap.aliases for font aliases ...\n");
   do_aliases();
-  write_akotfps_datafile() if ($opt_akotfps);
+  do_cmaps();
+  write_akotfps_datafile() if $opt_akotfps;
+  if ($opt_texmflink && !$dry_run) {
+    print_info("running mktexlsr ...\n");
+    system("mktexlsr");
+  }
   print_info("finished\n");
   if ($opt_winbatch) {
     if (-f $winbatch) {
@@ -661,26 +681,18 @@ sub do_nonotf_fonts {
     if $opt_texmflink;
   for my $k (sort keys %fontdb) {
     if ($fontdb{$k}{'available'} && $fontdb{$k}{'type'} eq 'TTF') {
-      generate_font_snippet($fontdest,
-        $k, $fontdb{$k}{'class'}, $fontdb{$k}{'target'});
       $outp .= generate_cidfmap_entry($k, $fontdb{$k}{'class'}, $fontdb{$k}{'ttfname'}, -1);
       link_font($fontdb{$k}{'target'}, $cidfsubst, $fontdb{$k}{'ttfname'});
       link_font($fontdb{$k}{'target'}, "$opt_texmflink/$ttf_pathpart", $fontdb{$k}{'ttfname'})
         if $opt_texmflink;
     } elsif ($fontdb{$k}{'available'} && $fontdb{$k}{'type'} eq 'TTC') {
-      generate_font_snippet($fontdest,
-        $k, $fontdb{$k}{'class'}, $fontdb{$k}{'target'});
       $outp .= generate_cidfmap_entry($k, $fontdb{$k}{'class'}, $fontdb{$k}{'ttcname'}, $fontdb{$k}{'subfont'});
       link_font($fontdb{$k}{'target'}, $cidfsubst, $fontdb{$k}{'ttcname'});
       link_font($fontdb{$k}{'target'}, "$opt_texmflink/$ttf_pathpart", $fontdb{$k}{'ttcname'})
         if $opt_texmflink;
     } elsif ($fontdb{$k}{'available'} && $fontdb{$k}{'type'} eq 'OTC') {
-      # currently Ghostscript does not have OTC support; not creating gs resource
+      # currently Ghostscript does not have OTC support; we don't know what to do
       print_debug("gs does not support OTC, not creating gs resource for $k\n");
-    # generate_font_snippet($fontdest,
-    #   $k, $fontdb{$k}{'class'}, $fontdb{$k}{'target'});
-    # $outp .= generate_cidfmap_entry($k, $fontdb{$k}{'class'}, $fontdb{$k}{'otcname'}, $fontdb{$k}{'subfont'});
-    # link_font($fontdb{$k}{'target'}, $cidfsubst, $fontdb{$k}{'otcname'});
       link_font($fontdb{$k}{'target'}, "$opt_texmflink/$otf_pathpart", $fontdb{$k}{'otcname'})
         if $opt_texmflink;
     }
@@ -716,7 +728,7 @@ sub do_aliases {
   #
   $outp .= "\n\n% Aliases\n";
   #
-  my (@jal, @kal, @tal, @sal);
+  my (@jal, @kal, @tal, @sal, @ai0al);
   #
   for my $al (sort keys %aliases) {
     my $target;
@@ -755,6 +767,8 @@ sub do_aliases {
       push @sal, "/$al /$target ;";
     } elsif ($class eq 'CNS') {
       push @tal, "/$al /$target ;";
+    } elsif ($class eq 'AI0') {
+      push @ai0al, "/$al /$target ;";
     } else {
       print STDERR "unknown class $class for $al\n";
     }
@@ -768,6 +782,7 @@ sub do_aliases {
   $outp .= "\n% Korean fonts\n" . join("\n", @kal) . "\n" if @kal;
   $outp .= "\n% Traditional Chinese fonts\n" . join("\n", @tal) . "\n" if @tal;
   $outp .= "\n% Simplified Chinese fonts\n" . join("\n", @sal) . "\n" if @sal;
+  $outp .= "\n% Adobe-Identity-0 fonts\n" . join("\n", @ai0al) . "\n" if @ai0al;
   #
   return if $dry_run;
   if ($outp && !$opt_remove) {
@@ -783,8 +798,69 @@ sub do_aliases {
   update_master_cidfmap('cidfmap.aliases');
   # if we are in cleanup mode, also remove cidfmap.aliases itself
   if (-f "$opt_output/$cidfmap_aliases_pathpart") {
-    unlink "$opt_output/$cidfmap_aliases_pathpart" if ($opt_cleanup);
+    unlink "$opt_output/$cidfmap_aliases_pathpart" if $opt_cleanup;
   }
+}
+
+sub do_cmaps {
+  # add symlinking CMaps
+  # for which we generate snippets but gs does not provide
+  my $cmapdest = "$opt_output/CMap";
+  return if $dry_run;
+  if ($opt_remove) {
+    # we remove only if both of the following conditions are met:
+    #   (1) it is a link
+    #   (2) the link target is the same as kpsewhich result
+    # otherwise it's unsafe to remove, as it may have been added
+    # by others or distributed by gs itself
+    for my $class (%encode_list) {
+      for my $enc (@{$encode_list{$class}}) {
+        if (-l "$cmapdest/$enc") {
+          my $linkt = readlink("$cmapdest/$enc");
+          if ($linkt) {
+            if ($linkt eq search_cmap($enc)) {
+              unlink("$cmapdest/$enc");
+            }
+          }
+        }
+      }
+    }
+    return;
+  }
+  # add mode
+  if (! -d "$cmapdest") {
+    print_debug("Creating directory $cmapdest ...\n");
+    make_dir("$cmapdest", "cannot create CMap directory");
+  }
+  for my $class (%encode_list) {
+    if ($class =~ m/^AI0-(.*)$/) {
+      # skip AI0 font-specific CMap when the real font is unavailable
+      next if (!$fontdb{$1}{'available'});
+    }
+    for my $enc (@{$encode_list{$class}}) {
+      if (! -f "$cmapdest/$enc") {
+        print_debug("CMap $enc is not found in gs resource directory\n");
+        my $dest = search_cmap($enc);
+        if ($dest) {
+          print_debug("Symlinking CMap $dest ...\n");
+          link_font($dest, "$cmapdest", $enc);
+        } else {
+          print_debug("CMap $enc is not found by kpsewhich\n");
+        }
+      }
+    }
+  }
+}
+
+my %cmap_cache;
+
+sub search_cmap {
+  my ($cmap) = @_;
+  # search CMap with kpsewhich and cache
+  if (! exists $cmap_cache{$cmap}) {
+    chomp($cmap_cache{$cmap} = `kpsewhich -format=cmap $cmap`);
+  }
+  return $cmap_cache{$cmap};
 }
 
 sub update_master_cidfmap {
@@ -815,16 +891,16 @@ sub update_master_cidfmap {
       } elsif (m/^\s*\(cidfmap\.TeXLive\)\s\s*\.runlibfile\s*$/) {
         # if found, it has to be disabled in add mode in a way in which it can
         # be detected in the (future) remove mode
-        next if ($found_tl); # skip it as duplicate (though unlikely to happen)
+        next if $found_tl; # skip it as duplicate (though unlikely to happen)
         $found_tl = 1;
         $newmaster .= "\%" if (!$opt_remove); # in add mode, disable it
         $newmaster .= $_; # pass it as-is
       } elsif (m/^\s*\%\%*\s*\(cidfmap\.TeXLive\)\s\s*\.runlibfile\s*$/) {
         # if found, it should be the one disabled by myself in the previous run;
         # restore it in remove mode
-        next if ($found_tl); # skip it as duplicate (though unlikely to happen)
+        next if $found_tl; # skip it as duplicate (though unlikely to happen)
         $found_tl = 1;
-        $_ =~ s/\%//g if ($opt_remove); # in remove mode, enable it
+        $_ =~ s/\%//g if $opt_remove; # in remove mode, enable it
         $newmaster .= $_; # pass it
       } else {
         $newmaster .= $_;
@@ -888,6 +964,9 @@ sub generate_cidfmap_entry {
     $s .= "1) 5]";
   } elsif ($c eq "Korea") {
     $s .= "1) 2]";
+  } elsif ($c eq "AI0") {
+    print_warning("cannot use class AI0 for non-OTF $n, skipping.\n");
+    return '';
   } else {
     print_warning("unknown class $c for $n, skipping.\n");
     return '';
@@ -902,6 +981,9 @@ sub generate_font_snippet {
   if ($opt_akotfps) {
     add_akotfps_data($n);
     return;
+  }
+  if ($c eq "AI0") {
+    $c = "AI0-$n";
   }
   for my $enc (@{$encode_list{$c}}) {
     if ($opt_remove) {
@@ -929,7 +1011,7 @@ pop
 sub add_akotfps_data {
   my ($fn) = @_;
   return if $dry_run;
-  if (! $opt_remove) {
+  if (!$opt_remove) {
     $akotfps_datacontent .= "$fn\n";
   }
 }
@@ -1018,7 +1100,7 @@ sub link_font {
   # if we are still here and $do_unlink is set, remove it
   maybe_unlink($target) if $do_unlink;
   # recreate link if we are not in the remove case
-  if (! $opt_remove) {
+  if (!$opt_remove) {
     maybe_symlink($f, $target) || die("Cannot link font $f to $target: $!");
   }
 }
@@ -1061,14 +1143,14 @@ sub maybe_symlink {
     if ($opt_winbatch) {
       # re-encoding of $winbatch_content is done by write_winbatch()
       $winbatch_content .= "if not exist \"$targetname\" mklink ";
-      $winbatch_content .= "/h " if ($opt_hardlink);
+      $winbatch_content .= "/h " if $opt_hardlink;
       $winbatch_content .= "\"$targetname\" \"$realname\"\n";
     } else {
       # should be encoded in cp932 for win32 console
       $realname = encode_utftocp($realname);
       $targetname = encode_utftocp($targetname);
       my $cmdl = "cmd.exe /c if not exist \"$targetname\" mklink ";
-      $cmdl .= "/h " if ($opt_hardlink);
+      $cmdl .= "/h " if $opt_hardlink;
       $cmdl .= "\"$targetname\" \"$realname\"";
       my @ret = `$cmdl`;
       # sometimes hard link creation may fail due to "Access denied"
@@ -1194,7 +1276,7 @@ sub info_found_fonts {
 # dump aliases
 sub info_list_aliases {
   print "List of ", ($opt_listallaliases ? "all" : "available"), " aliases and their options (in decreasing priority):\n" unless $opt_machine;
-  my (@jal, @kal, @tal, @sal);
+  my (@jal, @kal, @tal, @sal, @ai0al);
   for my $al (sort keys %aliases) {
     my $cl;
     my @ks = sort { $a <=> $b} keys(%{$aliases{$al}});
@@ -1226,6 +1308,8 @@ sub info_list_aliases {
       push @sal, $foo;
     } elsif ($cl eq 'CNS') {
       push @tal, $foo;
+    } elsif ($cl eq 'AI0') {
+      push @ai0al, $foo;
     } else {
       print STDERR "unknown class $cl for $al\n";
     }
@@ -1235,11 +1319,13 @@ sub info_list_aliases {
     print @kal if @kal;
     print @sal if @sal;
     print @tal if @tal;
+    print @ai0al if @ai0al;
   } else {
     print "Aliases for Japanese fonts:\n", @jal, "\n" if @jal;
     print "Aliases for Korean fonts:\n", @kal, "\n" if @kal;
     print "Aliases for Simplified Chinese fonts:\n", @sal, "\n" if @sal;
     print "Aliases for Traditional Chinese fonts:\n", @tal, "\n" if @tal;
+    print "Aliases for Adobe-Identity-0 fonts:\n", @ai0al, "\n" if @ai0al;
   }
 }
 
@@ -1282,7 +1368,8 @@ sub check_for_files {
       push @extradirs, "c:/windows/fonts//";
     } else {
       # other dirs to check, for normal unix?
-      for my $d (qw!/Library/Fonts /System/Library/Fonts /System/Library/Assets
+      for my $d (qw!/Library/Fonts /System/Library/Fonts
+                    /System/Library/Assets /System/Library/AssetsV2
                     /Network/Library/Fonts /usr/share/fonts!) {
         push @extradirs, "$d//" if (-d $d); # recursive search
       }
@@ -1323,8 +1410,8 @@ sub check_for_files {
         # comment out -- HY (2016/09/27)
         # my $newotf = join($sep, @extradirs) . $sep;
         # my $newttf = $newotf;
-        # $newotf .= $ENV{'OPENTYPEFONTS'} if ($ENV{'OPENTYPEFONTS'});
-        # $newttf .= $ENV{'TTFONTS'} if ($ENV{'TTFONTS'});
+        # $newotf .= $ENV{'OPENTYPEFONTS'} if $ENV{'OPENTYPEFONTS'};
+        # $newttf .= $ENV{'TTFONTS'} if $ENV{'TTFONTS'};
         # $ENV{'OPENTYPEFONTS'} = $newotf;
         # $ENV{'TTFONTS'} = $newttf;
         # new code for uppercase/lowercase workaround -- HY (2016/09/27)
@@ -1354,6 +1441,7 @@ sub check_for_files {
   # map basenames to filenames
   my %bntofn;
   for my $f (@foundfiles) {
+    $f =~ s/[\r\n]+\z//; # perl's chomp() on git-bash cannot strip CR of CRLF ??
     my $realf = abs_path($f);
     if (!$realf) {
       print_warning("dead link or strange file found: $f - ignored!\n");
@@ -1398,32 +1486,51 @@ sub check_for_files {
       # check for subfont extension
       my $realfile = $f;
       $realfile =~ s/^(.*)\(\d*\)$/$1/;
-      # check for casefolding
-      # we might catch different names (batang/Batang) and identify them wrongly on
-      #  * case-insensitive file systems (like HFS on MacOS)
-      #  * kpathsea 6.3.0 or later, with casefolding fallback search (TL2018)
-      # check the actual psname using otfinfo utility, only when we "know"
-      # both uppercase/lowercase font files are possible and they are different
+      my $index = 0;
+      if ($fontdb{$k}{'files'}{$f}{'type'} eq 'TTC' || $fontdb{$k}{'files'}{$f}{'type'} eq 'OTC') {
+        if ($f =~ m/^(.*)\((\d*)\)$/) {
+          $index = $2;
+        }
+      }
+      # double check for casefolding or incompatible OTC/TTC index
+      #   [1] casefolding issue
+      #     we might catch different names (batang/Batang) and identify them wrongly on
+      #        * case-insensitive file systems (like HFS on MacOS)
+      #        * kpathsea 6.3.0 or later, with casefolding fallback search (TL2018)
+      #     check the actual psname using zrlistttc.lua, only when we "know"
+      #     both uppercase/lowercase font files are possible and they are different
+      #   [2] incompatible index
+      #     the index in msgothic.ttc changed at some time between Win7 and Win10.
       my $actualpsname;
       my $bname;
-      for my $b (keys %{$bntofn{$realfile}}) {
-        if ($fontdb{$k}{'casefold'} && $otfinfo_available &&
-            ($fontdb{$k}{'files'}{$f}{'type'} eq 'OTF' || $fontdb{$k}{'files'}{$f}{'type'} eq 'TTF')) {
+      for my $b (sort keys %{$bntofn{$realfile}}) {
+        if ($opt_strictpsname && !$fontdb{$k}{'doublecheck'}) {
+          $fontdb{$k}{'doublecheck'} = "debug"; # stub
+        }
+        if ($fontdb{$k}{'doublecheck'} && $fontdb{$k}{'doublecheck'} ne "false" && $zrlistttc_available) {
           print_debug("We need to test whether\n");
-          print_debug("  $b\n");
-          print_debug("is the correct one. Invoking otfinfo ...\n");
-          chomp($actualpsname = `otfinfo -p "$b"`);
+          print_debug("  $b:$index\n");
+          print_debug("is the correct one ($k). Invoking zrlistttc ...\n");
+          chomp($actualpsname = `texlua $zrlistttc -i $index "$b"`);
           if ($?) {
-            # something is wrong with the font file, or otfinfo does not support it;
+            # something is wrong with the font file, or zrlistttc does not support it;
             # still there is a chance that Ghostscript supports, so don't discard it
             print_debug("... command exited with $?!\n");
             print_debug("OK, I'll take this, but it may not work properly.\n");
+            print_warning("zrlistttc check failed for $b\n") if $opt_strictpsname;
             $bname = $b;
             last;
           }
+          $actualpsname =~ s/[\r\n]+\z//; # perl's chomp() on git-bash cannot strip CR of CRLF ??
           if ($actualpsname ne $k) {
-            print_debug("... PSName returned by otfinfo ($actualpsname) is\n");
+            print_debug("... PSName returned by zrlistttc ($actualpsname) is\n");
             print_debug("different from our database ($k), discarding!\n");
+            if ($opt_strictpsname && $fontdb{$k}{'doublecheck'} eq "debug") {
+              # in our database, we've set $fontdb{$k}{'doublecheck'} to "true" intentionally
+              # when we *know* doublecheck is actually required;
+              # if the stub "debug" detects a difference, our database should contain a bug!
+              print_warning("zrlistttc check failed for $b: please report to the author!\n");
+            }
           } else {
             print_debug("... test passed.\n");
             $bname = $b;
@@ -1585,6 +1692,7 @@ sub read_font_database {
       die("Cannot find $opt_fontdef: $!");
     @dbl = <FDB>;
     close(FDB);
+    print_debug("New database file: $opt_fontdef...\n");
   } else {
     @dbl = <DATA>;
   }
@@ -1598,6 +1706,7 @@ sub read_font_database {
       die("Cannot find $_: $!");
     @dbl = <FDB>;
     close(FDB);
+    print_debug("Additional database file: $_...\n");
     read_each_font_database(@dbl);
   }
 }
@@ -1606,8 +1715,9 @@ sub read_each_font_database {
   my (@curdbl) = @_;
   my $fontname = "";
   my $fontclass = "";
+  my @fontcmaps = ();
   my %fontprovides = ();
-  my $fontcasefold = "";
+  my $fontdoublecheck = "";
   my %fontfiles;
   my $psname = "";
   my $lineno = 0;
@@ -1628,22 +1738,29 @@ sub read_each_font_database {
           }
           $fontdb{$realfontname}{'origname'} = $fontname;
           $fontdb{$realfontname}{'class'} = $fontclass;
-          $fontdb{$realfontname}{'casefold'} = $fontcasefold;
+          $fontdb{$realfontname}{'doublecheck'} = $fontdoublecheck;
           $fontdb{$realfontname}{'files'} = { %fontfiles };
           $fontdb{$realfontname}{'provides'} = { %fontprovides };
+          if ($fontclass eq "AI0") {
+            $encode_list{"AI0-$realfontname"} = [ @fontcmaps ];
+          } elsif (@fontcmaps) {
+            print_warning("CMap entry for $realfontname (Class: $fontclass) ignored!\n");
+          }
           if ($opt_debug >= 3) {
             print_dddebug("Dumping fontfiles for $realfontname: " . Data::Dumper::Dumper(\%fontfiles));
           }
           # reset to start
           $fontname = $fontclass = $psname = "";
-          $fontcasefold = "";
+          $fontdoublecheck = "";
+          @fontcmaps = ();
           %fontfiles = ();
           %fontprovides = ();
         } else {
           print_warning("incomplete entry above line $lineno for $fontname/$fontclass, skipping!\n");
           # reset to start
           $fontname = $fontclass = $psname = "";
-          $fontcasefold = "";
+          $fontdoublecheck = "";
+          @fontcmaps = ();
           %fontfiles = ();
           %fontprovides = ();
         }
@@ -1682,8 +1799,10 @@ sub read_each_font_database {
     if ($l =~ m/^Name:\s*(.*)$/) { $fontname = $1; next; }
     if ($l =~ m/^PSName:\s*(.*)$/) { $psname = $1; next; }
     if ($l =~ m/^Class:\s*(.*)$/) { $fontclass = $1 ; next ; }
+    if ($l =~ m/^CMap:\s*(.*)$/) { push(@fontcmaps, $1); next ; }
     if ($l =~ m/^Provides\((\d+)\):\s*(.*)$/) { $fontprovides{$2} = $1; next; }
-    if ($l =~ m/^Casefold:\s*(.*)$/) { $fontcasefold = $1 ; next ; }
+    if ($l =~ m/^Doublecheck:\s*(.*)$/) { $fontdoublecheck = $1 ; next ; }
+    if ($l =~ m/^Casefold:\s*(.*)$/) { $fontdoublecheck = $1 ; next ; } # no longer used
     # new code: distinguish 4 types (otf, otc, ttf, ttc)
     if ($l =~ m/^OTFname(\((\d+)\))?:\s*(.*)$/) {
       my $fn = $3;
@@ -1792,11 +1911,17 @@ sub dump_font_database {
   for my $k (sort keys %fontdb) {
     print FOO "Name: $fontdb{$k}{'origname'}\n";
     print FOO "PSName: $k\n" if ($fontdb{$k}{'origname'} ne $k);
-    print FOO "Class: $fontdb{$k}{'class'}\n";
+    my $class = $fontdb{$k}{'class'};
+    print FOO "Class: $class\n";
+    if ($class eq "AI0") {
+      for my $cmap (@{$encode_list{"AI0-$k"}}) {
+        print FOO "CMap: $cmap\n";
+      }
+    }
     for my $p (sort keys %{$fontdb{$k}{'provides'}}) {
       print FOO "Provides($fontdb{$k}{'provides'}{$p}): $p\n";
     }
-    print FOO "Casefold: $fontdb{$k}{'casefold'}\n" if ($fontdb{$k}{'casefold'});
+    print FOO "Doublecheck: $fontdb{$k}{'doublecheck'}\n" if ($fontdb{$k}{'doublecheck'});
     for my $f (sort { $fontdb{$k}{'files'}{$a}{'priority'}
                       <=>
                       $fontdb{$k}{'files'}{$b}{'priority'} }
@@ -1915,10 +2040,11 @@ sub find_gs_resource {
 
 sub kpse_miscfont {
   my ($file) = @_;
-  chomp(my $foo = `kpsewhich -format=miscfont $file`);
-  # for GitHub repository diretory structure
+  my $foo = '';
+  # first, prioritize GitHub repository diretory structure
+  $foo = "database/$file" if (-f "database/$file");
   if ($foo eq "") {
-    $foo = "database/$file" if (-f "database/$file");
+    chomp($foo = `kpsewhich -format=miscfont $file`);
   }
   return $foo;
 }
@@ -2009,6 +2135,9 @@ This script searches a list of directories for CJK fonts, and makes
 them available to an installed Ghostscript. In the simplest case with
 sufficient privileges, a run without arguments should effect in a
 complete setup of Ghostscript.
+Search is done using the kpathsea library, in particular `kpsewhich`
+program. To run this script, you will need some TeX distribution in
+your system.
 ";
 
 my $operation = "
@@ -2116,6 +2245,7 @@ alias if necessary.
 For the Japanese fonts:
     Morisawa Pr6N, Morisawa, Hiragino ProN, Hiragino,
     Kozuka Pr6N, Kozuka ProVI, Kozuka Pro, Kozuka Std,
+    HaranoAji,
     Yu OS X, Yu Win, MS,
     Moga-Mobo-ex, Moga-Mobo, IPAex, IPA, Ume
 
@@ -2237,29 +2367,40 @@ __DATA__
 # CJK FONT DEFINITIONS
 #
 
+# Noto
+INCLUDE cjkgs-notoserif.dat
+INCLUDE cjkgs-notosans.dat
+
+# SourceHan
+INCLUDE cjkgs-sourcehanserif.dat
+INCLUDE cjkgs-sourcehansans.dat
+
 #
 # JAPANESE FONTS
 #
 
-# Morisawa -- Provides level 10(Pr6N), 15(Pr6), 18(Pr5), 20(Pro)
+# Morisawa -- Provides J10(Pr6N), J15(Pr6), J18(Pr5), J20(Pro)
 INCLUDE cjkgs-morisawa.dat
-INCLUDE cjkgs-morisawa-extra.dat
+#INCLUDE cjkgs-morisawa-extra.dat
 
-# Hiragino -- Provides level 30(ProN), 40(Pro)
+# Hiragino -- Provides J30(ProN), J40(Pro)
 INCLUDE cjkgs-hiragino.dat
 
-# Kozuka -- Provides level 50(Pr6N), 55(ProVI), 60(Pro), 65(Std)
+# Kozuka -- Provides J50(Pr6N), J55(ProVI), J60(Pro), J65(Std)
 INCLUDE cjkgs-kozuka.dat
 INCLUDE cjkgs-ryokana.dat
 
-# Yu-fonts MacOS version -- Provides level 80
+# Yu-fonts MacOS version -- Provides J80
 INCLUDE cjkgs-yu-osx.dat
 
-# Yu-fonts Windows/MSOffice version -- Provides level 90
+# Yu-fonts Windows/MSOffice version -- Provides J90
 INCLUDE cjkgs-yu-win.dat
 
-# MS -- Provides level 95
+# MS -- Provides J95
 INCLUDE cjkgs-microsoft.dat
+
+# BIZ UD
+INCLUDE cjkgs-bizud.dat
 
 # TypeBank
 INCLUDE cjkgs-typebank.dat
@@ -2270,113 +2411,23 @@ INCLUDE cjkgs-fontworks.dat
 # Toppan
 INCLUDE cjkgs-toppan.dat
 
-# Moga-Mobo from Y.Oz Vox (free) -- Provides level 100(Ex), 110(none)
+# Heisei
+INCLUDE cjkgs-heisei.dat
+
+# Moga-Mobo from Y.Oz Vox (free) -- Provides J100(Ex), J110(none)
 INCLUDE cjkgs-mogamobo.dat
 
-# Ume-font (free) -- Provides level 140
+# IPA (free) -- Provides J120(Ex), J130(none)
+INCLUDE cjkgs-ipa.dat
+
+# Ume-font (free) -- Provides J140
 INCLUDE cjkgs-ume.dat
 
-# IPA (free) -- Provides level 120(Ex), 130(none)
-
-Name: IPAMincho
-Class: Japan
-Provides(130): Ryumin-Light
-Provides(130): RyuminPro-Light
-Provides(130): HiraMinProN-W3
-Provides(130): HiraMinPro-W3
-Provides(130): FutoMinA101-Bold
-Provides(130): FutoMinA101Pro-Bold
-Provides(130): HiraMinProN-W6
-Provides(130): HiraMinPro-W6
-Provides(130): MidashiMin-MA31
-Provides(130): MidashiMinPro-MA31
-TTFname(20): ipam.ttf
-#TTFname(21): IPAMincho.ttf
-
-Name: IPAGothic
-Class: Japan
-Provides(130): GothicBBB-Medium
-Provides(130): GothicBBBPro-Medium
-Provides(130): HiraKakuProN-W3
-Provides(130): HiraKakuPro-W3
-Provides(130): FutoGoB101-Bold
-Provides(130): FutoGoB101Pro-Bold
-Provides(130): HiraKakuProN-W6
-Provides(130): HiraKakuPro-W6
-Provides(130): MidashiGo-MB31
-Provides(130): MidashiGoPro-MB31
-Provides(130): HiraKakuStdN-W8
-Provides(130): HiraKakuStd-W8
-Provides(130): Jun101-Light
-Provides(130): Jun101Pro-Light
-Provides(130): HiraMaruProN-W4
-Provides(130): HiraMaruPro-W4
-TTFname(20): ipag.ttf
-#TTFname(21): IPAGothic.ttf
-
-Name: IPAexMincho
-Class: Japan
-Provides(120): Ryumin-Light
-Provides(120): RyuminPro-Light
-Provides(120): HiraMinProN-W3
-Provides(120): HiraMinPro-W3
-Provides(120): FutoMinA101-Bold
-Provides(120): FutoMinA101Pro-Bold
-Provides(120): HiraMinProN-W6
-Provides(120): HiraMinPro-W6
-Provides(120): MidashiMin-MA31
-Provides(120): MidashiMinPro-MA31
-TTFname(20): ipaexm.ttf
-#TTFname(21): IPAexMincho.ttf
-
-Name: IPAexGothic
-Class: Japan
-Provides(120): GothicBBB-Medium
-Provides(120): GothicBBBPro-Medium
-Provides(120): HiraKakuProN-W3
-Provides(120): HiraKakuPro-W3
-Provides(120): FutoGoB101-Bold
-Provides(120): FutoGoB101Pro-Bold
-Provides(120): HiraKakuProN-W6
-Provides(120): HiraKakuPro-W6
-Provides(120): MidashiGo-MB31
-Provides(120): MidashiGoPro-MB31
-Provides(120): HiraKakuStdN-W8
-Provides(120): HiraKakuStd-W8
-Provides(120): Jun101-Light
-Provides(120): Jun101Pro-Light
-Provides(120): HiraMaruProN-W4
-Provides(120): HiraMaruPro-W4
-TTFname(20): ipaexg.ttf
-#TTFname(21): IPAexGothic.ttf
-
-# IPA proportional (free)
-
-Name: IPAPMincho
-Class: Japan
-TTFname(20): ipamp.ttf
-#TTFname(21): IPAPMincho.ttf
-
-Name: IPAPGothic
-Class: Japan
-TTFname(20): ipagp.ttf
-#TTFname(21): IPAPGothic.ttf
-
-# IPA MJ (free)
-
-Name: IPAmjMincho
-Class: Japan
-TTFname: ipamjm.ttf
-
 # Sazanami (free)
+INCLUDE cjkgs-sazanami.dat
 
-Name: Sazanami-Mincho-Regular
-Class: Japan
-TTFname: sazanami-mincho.ttf
-
-Name: Sazanami-Gothic-Regular
-Class: Japan
-TTFname: sazanami-gothic.ttf
+# Harano Aji Fonts (free) -- Provides J70, J71
+INCLUDE cjkgs-haranoaji.dat
 
 # Osaka (Apple)
 
@@ -2392,98 +2443,26 @@ TTFname: OsakaMono.ttf
 # CHINESE FONTS
 #
 
-# Adobe -- Provides level 30
+# Adobe -- Provides S30, T30
 INCLUDE cjkgs-adobe.dat
 
-# Hiragino -- Provides level 50
+# Hiragino -- Provides S50
 # (already included in JAPANESE section)
 
-# Beijing Founder Electronics -- Provides level 55
+# Beijing Founder Electronics -- Provides S55
 INCLUDE cjkgs-founder.dat
 
-# DynaComware -- Provides level ??
-INCLUDE cjkgs-dynacomware.dat
-
-# Changzhou SinoType -- Provides level ??
+# Changzhou SinoType -- Provides S??
 INCLUDE cjkgs-sinotype.dat
 
-# Arphic Font Design Team (OS X)
+# DynaComware -- Provides T??
+INCLUDE cjkgs-dynacomware.dat
 
-Name: WeibeiSC-Bold
-PSName: Weibei-SC-Bold
-Class: GB
-OTFname: WeibeiSC-Bold.otf
+# Monotype
+INCLUDE cjkgs-monotype.dat
 
-Name: WeibeiTC-Bold
-PSName: Weibei-TC-Bold
-Class: CNS
-OTFname: WeibeiTC-Bold.otf
-
-# Monotype Imaging (OS X)
-
-Name: YuppySC-Regular
-Class: GB
-OTFname: YuppySC-Regular.otf
-
-Name: YuppyTC-Regular
-Class: CNS
-OTFname: YuppyTC-Regular.otf
-
-# Monotype Hong Kong (OS X)
-
-Name: LingWaiSC-Medium
-PSName: MLingWaiMedium-SC
-Class: GB
-OTFname: LingWaiSC-Medium.otf
-
-Name: LingWaiTC-Medium
-PSName: MLingWaiMedium-TC
-Class: CNS
-OTFname: LingWaiTC-Medium.otf
-
-# DynaComware Taiwan (OS X)
-
-Name: WawaSC-Regular
-PSName: DFWaWaSC-W5
-Class: GB
-OTFname: WawaSC-Regular.otf
-
-Name: WawaTC-Regular
-PSName: DFWaWaTC-W5
-Class: CNS
-OTFname: WawaTC-Regular.otf
-
-Name: HannotateSC-W5
-Class: GB
-OTCname: Hannotate.ttc(0)
-
-Name: HannotateTC-W5
-Class: CNS
-OTCname: Hannotate.ttc(1)
-
-Name: HannotateSC-W7
-Class: GB
-OTCname: Hannotate.ttc(2)
-
-Name: HannotateTC-W7
-Class: CNS
-OTCname: Hannotate.ttc(3)
-
-Name: HanziPenSC-W3
-Class: GB
-OTCname: Hanzipen.ttc(0)
-
-Name: HanziPenTC-W3
-Class: CNS
-OTCname: Hanzipen.ttc(1)
-
-Name: HanziPenSC-W5
-Class: GB
-OTCname: Hanzipen.ttc(2)
-
-Name: HanziPenTC-W5
-Class: CNS
-OTCname: Hanzipen.ttc(3)
+# Apple
+INCLUDE cjkgs-apple.dat
 
 # Shanghai Ikarus Ltd./URW Software & Type GmbH
 
@@ -2495,195 +2474,18 @@ Name: SIL-Kai-Reg-Jian
 Class: GB
 TTFname: Kai.ttf
 
-# Apple
+# Fandol (free) -- Provides S40
+INCLUDE cjkgs-fandol.dat
 
-Name: LiSungLight
-Class: CNS
-TTFname(20): Apple LiSung Light.ttf
-TTFname(10): LiSungLight.ttf
+# Arphic (free) -- Provides S80, T80
+INCLUDE cjkgs-arphic.dat
 
-Name: LiGothicMed
-Class: CNS
-TTFname(20): Apple LiGothic Medium.ttf
-TTFname(10): LiGothicMed.ttf
-
-# Fandol (free)
-
-Name: FandolSong-Regular
-Class: GB
-Provides(40): STSong-Light
-OTFname(10): FandolSong-Regular.otf
-
-Name: FandolSong-Bold
-Provides(40): STSong-Regular
-Class: GB
-OTFname(10): FandolSong-Bold.otf
-
-Name: FandolKai-Regular
-Class: GB
-Provides(40): STKaiti-Regular
-OTFname(10): FandolKai-Regular.otf
-
-Name: FandolHei-Regular
-Class: GB
-Provides(40): STHeiti-Regular
-Provides(40): STHeiti-Light
-OTFname(10): FandolHei-Regular.otf
-
-Name: FandolHei-Bold
-Class: GB
-OTFname(10): FandolHei-Bold.otf
-
-Name: FandolFang-Regular
-Class: GB
-Provides(40): STFangsong-Light
-Provides(40): STFangsong-Regular
-OTFname(10): FandolFang-Regular.otf
-
-# Arphic (free)
-
-Name: BousungEG-Light-GB
-Class: GB
-Provides(80): STSong-Light
-Provides(80): STSong-Regular
-Provides(80): STFangsong-Light
-Provides(80): STFangsong-Regular
-TTFname: gbsn00lp.ttf
-
-Name: GBZenKai-Medium
-Class: GB
-Provides(80): STKaiti-Regular
-Provides(80): STHeiti-Regular
-Provides(80): STHeiti-Light
-TTFname: gkai00mp.ttf
-
-Name: ShanHeiSun-Light
-Class: CNS
-Provides(80): MSung-Light
-Provides(80): MSung-Medium
-TTFname: bsmi00lp.ttf
-
-Name: ZenKai-Medium
-Class: CNS
-Provides(80): MKai-Medium
-Provides(80): MHei-Medium
-TTFname: bkai00mp.ttf
-
-# CJK-Unifonts new ttc edition (free)
-
-Name: UMingCN
-Class: GB
-Provides(70): STSong-Light
-Provides(70): STSong-Regular
-Provides(70): STFangsong-Light
-Provides(70): STFangsong-Regular
-TTCname: uming.ttc(0)
-
-Name: UMingTW
-Class: CNS
-Provides(70): MSung-Light
-Provides(70): MSung-Medium
-TTCname: uming.ttc(2)
-
-Name: UKaiCN
-Class: GB
-Provides(70): STKaiti-Regular
-Provides(70): STHeiti-Regular
-Provides(70): STHeiti-Light
-TTCname: ukai.ttc(0)
-
-Name: UKaiTW
-Class: CNS
-Provides(70): MKai-Medium
-Provides(70): MHei-Medium
-TTCname: ukai.ttc(2)
-
-# CJK-Unifonts old ttf edition (free)
-
-# CNS
-Name: ShanHeiSun-Uni
-Class: CNS
-Provides(90): MSung-Light
-Provides(90): MSung-Medium
-TTFname: uming.ttf
-
-# GB
-Name: ShanHeiSun-Uni-Adobe-GB1
-Class: GB
-Provides(90): STSong-Light
-Provides(90): STSong-Regular
-Provides(90): STFangsong-Light
-Provides(90): STFangsong-Regular
-TTFname: uming.ttf
-
-# CNS
-Name: ZenKai-Uni
-Class: CNS
-Provides(90): MKai-Medium
-Provides(90): MHei-Medium
-TTFname: ukai.ttf
-
-# GB
-Name: ZenKai-Uni-Adobe-GB1
-Class: GB
-Provides(90): STKaiti-Regular
-Provides(90): STHeiti-Regular
-Provides(90): STHeiti-Light
-TTFname: ukai.ttf
+# CJK-Unifonts new ttc edition (free) -- Provides T70, S70
+# CJK-Unifonts old ttf edition (free) -- Provides T90, S90
+INCLUDE cjkgs-cjkuni.dat
 
 # WenQuanYi (free)
-
-# GB
-Name: WenQuanYiMicroHei
-Class: GB
-TTCname(10): wqy-microhei.ttc(0)
-
-# CNS
-Name: WenQuanYiMicroHei-Adobe-CNS1
-Class: CNS
-TTCname(10): wqy-microhei.ttc(0)
-
-# GB
-Name: WenQuanYiMicroHeiMono
-Class: GB
-TTCname(10): wqy-microhei.ttc(1)
-
-# CNS
-Name: WenQuanYiMicroHeiMono-Adobe-CNS1
-Class: CNS
-TTCname(10): wqy-microhei.ttc(1)
-
-# GB
-Name: WenQuanYiZenHei
-Class: GB
-TTCname(10): wqy-zenhei.ttc(0)
-TTFname(20): wqy-zenhei.ttf
-
-# CNS
-Name: WenQuanYiZenHei-Adobe-CNS1
-Class: CNS
-TTCname(10): wqy-zenhei.ttc(0)
-TTFname(20): wqy-zenhei.ttf
-
-# GB
-Name: WenQuanYiZenHeiMono
-Class: GB
-TTCname(10): wqy-zenhei.ttc(1)
-
-# CNS:
-Name: WenQuanYiZenHeiMono-Adobe-CNS1
-Class: CNS
-TTCname(10): wqy-zenhei.ttc(1)
-
-# GB
-Name: WenQuanYiZenHeiSharp
-Class: GB
-TTCname(10): wqy-zenhei.ttc(2)
-
-# CNS
-Name: WenQuanYiZenHeiSharp-Adobe-CNS1
-Class: CNS
-TTCname(10): wqy-zenhei.ttc(2)
+INCLUDE cjkgs-wenquanyi.dat
 
 # cwTeX (free)
 
@@ -2711,10 +2513,10 @@ TTFname: cwfs.ttf
 # KOREAN FONTS
 #
 
-# Adobe -- Provides level 30
+# Adobe -- Provides K30/80
 # (already included in CHINESE section)
 
-# Solaris -- Provides level 40
+# Solaris -- Provides K40
 INCLUDE cjkgs-solaris.dat
 
 # Baekmuk (free)
@@ -2726,7 +2528,7 @@ INCLUDE cjkgs-solaris.dat
 Name: Baekmuk-Batang
 Class: Korea
 Provides(70): HYSMyeongJo-Medium
-Casefold: true
+Doublecheck: true
 TTFname(20): batang.ttf
 TTFname(10): Baekmuk-Batang.ttf
 
@@ -2739,7 +2541,7 @@ TTFname(10): Baekmuk-Dotum.ttf
 Name: Baekmuk-Gulim
 Class: Korea
 Provides(70): HYRGoThic-Medium
-Casefold: true
+Doublecheck: true
 TTFname(20): gulim.ttf
 TTFname(10): Baekmuk-Gulim.ttf
 
@@ -2748,180 +2550,11 @@ Class: Korea
 TTFname(20): hline.ttf
 TTFname(10): Baekmuk-Headline.ttf
 
-# Unfonts-core (free)
+# Unfonts (free) -- Provides K60
+INCLUDE cjkgs-unfonts.dat
 
-Name: UnBatang
-Class: Korea
-Provides(60): HYSMyeongJo-Medium
-TTFname: UnBatang.ttf
-
-Name: UnBatang-Bold
-Class: Korea
-TTFname: UnBatangBold.ttf
-
-Name: UnDotum
-Class: Korea
-Provides(60): HYGoThic-Medium
-TTFname: UnDotum.ttf
-
-Name: UnDotum-Bold
-Class: Korea
-TTFname: UnDotumBold.ttf
-
-Name: UnDinaru
-Class: Korea
-Provides(60): HYRGoThic-Medium
-TTFname: UnDinaru.ttf
-
-Name: UnDinaru-Bold
-Class: Korea
-TTFname: UnDinaruBold.ttf
-
-Name: UnDinaru-Light
-Class: Korea
-TTFname: UnDinaruLight.ttf
-
-Name: UnGraphic
-Class: Korea
-TTFname: UnGraphic.ttf
-
-Name: UnGraphic-Bold
-Class: Korea
-TTFname: UnGraphicBold.ttf
-
-Name: UnGungseo
-Class: Korea
-TTFname: UnGungseo.ttf
-
-Name: UnPilgi
-Class: Korea
-TTFname: UnPilgi.ttf
-
-Name: UnPilgi-Bold
-Class: Korea
-TTFname: UnPilgiBold.ttf
-
-# Unfonts-extra (free)
-
-Name: UnBom
-Class: Korea
-TTFname: UnBom.ttf
-
-Name: UnPen
-Class: Korea
-TTFname: UnPen.ttf
-
-Name: UnPenheulim
-Class: Korea
-TTFname: UnPenheulim.ttf
-
-Name: UnPilgia
-Class: Korea
-TTFname: UnPilgia.ttf
-
-Name: UnShinmun
-Class: Korea
-TTFname: UnShinmun.ttf
-
-Name: UnVada
-Class: Korea
-TTFname: UnVada.ttf
-
-Name: UnYetgul
-Class: Korea
-TTFname: UnYetgul.ttf
-
-Name: UnTaza
-Class: Korea
-TTFname: UnTaza.ttf
-
-# UnJamo... family has proportional metrics
-Name: UnJamoBatang
-Class: Korea
-TTFname: UnJamoBatang.ttf
-
-Name: UnJamoDotum
-Class: Korea
-TTFname: UnJamoDotum.ttf
-
-Name: UnJamoNovel
-Class: Korea
-TTFname: UnJamoNovel.ttf
-
-Name: UnJamoSora
-Class: Korea
-TTFname: UnJamoSora.ttf
-
-# Nanum (free - TTF files) and Nanum OS X (free - TTC files)
-# note that all fonts have narrow metrics
-
-Name: NanumMyeongjo
-Class: Korea
-TTFname(10): NanumMyeongjo.ttf
-TTCname(20): NanumMyeongjo.ttc(0)
-
-Name: NanumMyeongjoBold
-Class: Korea
-TTFname(10): NanumMyeongjoBold.ttf
-TTCname(20): NanumMyeongjo.ttc(1)
-
-Name: NanumMyeongjoExtraBold
-Class: Korea
-TTFname(10): NanumMyeongjoExtraBold.ttf
-TTCname(20): NanumMyeongjo.ttc(2)
-
-Name: NanumGothic
-Class: Korea
-TTFname(10): NanumGothic.ttf
-TTCname(20): NanumGothic.ttc(0)
-
-Name: NanumGothicBold
-Class: Korea
-TTFname(10): NanumGothicBold.ttf
-TTCname(20): NanumGothic.ttc(1)
-
-Name: NanumGothicExtraBold
-Class: Korea
-TTFname(10): NanumGothicExtraBold.ttf
-TTCname(20): NanumGothic.ttc(2)
-
-Name: NanumGothicLight
-Class: Korea
-TTFname(10): NanumGothicLight.ttf
-
-Name: NanumBarunGothic
-Class: Korea
-TTFname(10): NanumBarunGothic.ttf
-
-Name: NanumBarunGothicBold
-Class: Korea
-TTFname(10): NanumBarunGothicBold.ttf
-
-Name: NanumBarunGothicLight
-Class: Korea
-TTFname(10): NanumBarunGothicLight.ttf
-
-Name: NanumBarunGothicUltraLight
-Class: Korea
-TTFname(10): NanumBarunGothicUltraLight.ttf
-
-Name: NanumBarunpen
-Class: Korea
-TTFname(10): NanumBarunpenR.ttf
-
-Name: NanumBarunpen-Bold
-Class: Korea
-TTFname(10): NanumBarunpenB.ttf
-
-Name: NanumBrush
-Class: Korea
-TTFname(10): NanumBrush.ttf
-TTCname(20): NanumScript.ttc(0)
-
-Name: NanumPen
-Class: Korea
-TTFname(10): NanumPen.ttf
-TTCname(20): NanumScript.ttc(1)
+# Nanum (free)
+INCLUDE cjkgs-nanum.dat
 
 # Design font by Ho-Seok Ee, aka. "ALee's font" (free)
 
@@ -2952,97 +2585,8 @@ Class: Korea
 TTFname: BM-HANNA.ttf
 
 # Hancom HCR (free)
-# note that all fonts have narrow metrics
+INCLUDE cjkgs-hancom.dat
 
-Name: HCRBatang
-Class: Korea
-TTFname: HANBatang.ttf
-
-Name: HCRBatang-Bold
-Class: Korea
-TTFname: HANBatangB.ttf
-
-Name: HCRDotum
-Class: Korea
-TTFname: HANDotum.ttf
-
-Name: HCRDotum-Bold
-Class: Korea
-TTFname: HANDotumB.ttf
-
-# Apple
-
-Name: AppleMyungjo
-Class: Korea
-#Provides(??): HYSMyeongJo-Medium # fails
-TTFname: AppleMyungjo.ttf
-
-Name: AppleGothic
-Class: Korea
-#Provides(??): HYGoThic-Medium # fails
-#Provides(??): HYRGoThic-Medium # fails
-TTFname: AppleGothic.ttf
-
-Name: AppleSDGothicNeo-Regular
-Class: Korea
-OTFname(10): AppleSDGothicNeo-Regular.otf
-OTCname(20): AppleSDGothicNeo.ttc(0)
-
-Name: AppleSDGothicNeo-Medium
-Class: Korea
-OTFname(10): AppleSDGothicNeo-Medium.otf
-OTCname(20): AppleSDGothicNeo.ttc(2)
-
-Name: AppleSDGothicNeo-SemiBold
-Class: Korea
-OTFname(10): AppleSDGothicNeo-SemiBold.otf
-OTCname(20): AppleSDGothicNeo.ttc(4)
-
-Name: AppleSDGothicNeo-Bold
-Class: Korea
-OTFname(10): AppleSDGothicNeo-Bold.otf
-OTCname(20): AppleSDGothicNeo.ttc(6)
-
-Name: AppleSDGothicNeo-Light
-Class: Korea
-OTFname(10): AppleSDGothicNeo-Light.otf
-OTCname(20): AppleSDGothicNeo.ttc(8)
-
-Name: AppleSDGothicNeo-Thin
-Class: Korea
-OTFname(10): AppleSDGothicNeo-Thin.otf
-OTCname(20): AppleSDGothicNeo.ttc(10)
-
-Name: AppleSDGothicNeo-UltraLight
-Class: Korea
-OTFname(10): AppleSDGothicNeo-UltraLight.otf
-OTCname(20): AppleSDGothicNeo.ttc(12)
-
-Name: AppleSDGothicNeo-ExtraBold
-Class: Korea
-OTFname(10): AppleSDGothicNeo-ExtraBold.otf
-OTCname(20): AppleSDGothicNeo.ttc(14)
-
-Name: AppleSDGothicNeo-Heavy
-Class: Korea
-OTFname(10): AppleSDGothicNeo-Heavy.otf
-OTCname(20): AppleSDGothicNeo.ttc(16)
-
-Name: JCsmPC
-Class: Korea
-TTFname: PCmyoungjo.ttf
-
-Name: JCfg
-Class: Korea
-TTFname: Pilgiche.ttf
-
-Name: JCkg
-Class: Korea
-TTFname: Gungseouche.ttf
-
-Name: JCHEadA
-Class: Korea
-TTFname: HeadlineA.ttf
 
 #
 # Microsoft Windows, Windows/Mac Office fonts
@@ -3052,7 +2596,7 @@ TTFname: HeadlineA.ttf
 
 Name: Batang
 Class: Korea
-Casefold: true
+Doublecheck: true
 TTFname(50): Batang.ttf
 TTCname(20): batang.ttc(0)
 
@@ -3072,7 +2616,7 @@ TTCname(20): gulim.ttc(3)
 
 Name: Gulim
 Class: Korea
-Casefold: true
+Doublecheck: true
 TTFname(50): Gulim.ttf
 TTCname(20): gulim.ttc(0)
 
@@ -3090,8 +2634,18 @@ Name: GungsuhChe
 Class: Korea
 TTCname(20): batang.ttc(3)
 
+# for Windows 10
+# and Office for Mac 2016 (at least Ver.16.11.0, 2018-03)
+Name: MalgunGothic
+Class: Korea
+Doublecheck: true
+TTFname: malgun.ttf
+
+# for Windows 7
+# and Office for Mac 2016 (Ver.15.32.0, 2017-03)
 Name: MalgunGothicRegular
 Class: Korea
+Doublecheck: true
 TTFname: malgun.ttf
 
 Name: MalgunGothicBold
@@ -3222,6 +2776,7 @@ TTFname(10): MSMHei-Bold.ttf
 # Remove-only database (should begin with !INCLUDE)
 # that is, entries which contain at least one 'RMVname' line
 # note that this line should come at the _end_ of all INCLUDE files
+!INCLUDE cjkgs-removeonly.dat
 !INCLUDE cjkgs-macos-removeonly.dat
 
 

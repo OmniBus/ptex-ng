@@ -1,4 +1,4 @@
-% This is a change file for upTeX u1.23
+% This is a change file for upTeX u1.26
 % By Takuji Tanaka.
 %
 % (02/26/2007) TTK  upTeX u0.01
@@ -38,6 +38,10 @@
 % (04/09/2017) TTK  Hironori Kitagawa fixed a bug in \endlinechar.
 % (2018-01-21) HK   Added \uptexversion primitive and co.
 % (2018-02-24) TTK  upTeX u1.23
+% (2019-02-23) TTK  upTeX u1.24
+% (2019-05-06) HK   Hironori Kitagawa fixed a bug in \if.
+% (2019-05-06) TTK  upTeX u1.25
+% (2020-02-22) TTK  upTeX u1.26
 
 @x upTeX: banner
   {printed when \pTeX\ starts}
@@ -45,8 +49,8 @@
   {printed when \pTeX\ starts}
 @#
 @d upTeX_version=1
-@d upTeX_revision==".23"
-@d upTeX_version_string=='-u1.23' {current u\pTeX\ version}
+@d upTeX_revision==".26"
+@d upTeX_version_string=='-u1.26' {current u\pTeX\ version}
 @#
 @d upTeX_banner=='This is upTeX, Version 3.14159265',pTeX_version_string,upTeX_version_string
 @d upTeX_banner_k==upTeX_banner
@@ -141,6 +145,7 @@ if (kcode_pos=1)or((kcode_pos>=@'11)and(kcode_pos<=@'12))
 @d max_quarterword=255 {largest allowable value in a |quarterword|}
 @d min_halfword==-@"FFFFFFF {smallest allowable value in a |halfword|}
 @d max_halfword==@"FFFFFFF {largest allowable value in a |halfword|}
+@d max_cjk_val=@"10000
 @y
 @d min_quarterword=0 {smallest allowable value in a |quarterword|}
 @d max_quarterword=@"FFFF {largest allowable value in a |quarterword|}
@@ -239,24 +244,24 @@ for k:=0 to 511 do
 if (isinternalUPTEX) then begin
   { default: |other_kchar| }
   @t\hskip10pt@>kcat_code(@"0):=not_cjk;
-  @t\hskip10pt@>kcat_code(@"2):=not_cjk; { Latin Extended-A }
+  @+@t\1@>for k:=@"2 to @"3 do kcat_code(k):=not_cjk; { Latin Extended-A, Latin Extended-B }
   @t\hskip10pt@>kcat_code(@"24):=hangul; { Hangul Jamo }
-  @+@t\1@>for k:=@"66 to @"68 do kcat_code(k):=kanji; { CJK Radicals Supplement .. Ideographic Description Characters }
-  @+@t\1@>for k:=@"6A to @"6B do kcat_code(k):=kana;  { Hiragana, Katakana }
-  @t\hskip10pt@>kcat_code(@"6C):=kanji; { Bopomofo }
-  @t\hskip10pt@>kcat_code(@"6D):=hangul; { Hangul Compatibility Jamo }
-  @+@t\1@>for k:=@"6E to @"70 do kcat_code(k):=kanji; { Kanbun .. CJK Strokes }
-  @t\hskip10pt@>kcat_code(@"71):=kana; { Katakana Phonetic Extensions }
-  @t\hskip10pt@>kcat_code(@"74):=kanji; { CJK Unified Ideographs Extension A }
-  @t\hskip10pt@>kcat_code(@"76):=kanji; { CJK Unified Ideographs }
-  @t\hskip10pt@>kcat_code(@"86):=hangul; { Hangul Jamo Extended-A }
-  @t\hskip10pt@>kcat_code(@"91):=hangul; { Hangul Syllables }
-  @t\hskip10pt@>kcat_code(@"92):=hangul; { Hangul Jamo Extended-B }
-  @t\hskip10pt@>kcat_code(@"97):=kanji; { CJK Compatibility Ideographs }
-  { \hskip10pt|kcat_code(@"A0):=other_kchar;| Halfwidth and Fullwidth Forms }
-  @t\hskip10pt@>kcat_code(@"F1):=kana; { Kana Supplement }
-  @t\hskip10pt@>kcat_code(@"F2):=kana; { Kana Extended-A }
-  @+@t\1@>for k:=@"10E to @"113 do kcat_code(k):=kanji; { CJK Unified Ideographs Extension B .. CJK Compatibility Ideographs Supplement }
+  @t\hskip10pt@>kcat_code(@"45):=not_cjk; { Latin Extended Additional }
+  @+@t\1@>for k:=@"67 to @"69 do kcat_code(k):=kanji; { CJK Radicals Supplement .. Ideographic Description Characters }
+  @+@t\1@>for k:=@"6B to @"6C do kcat_code(k):=kana;  { Hiragana, Katakana }
+  @t\hskip10pt@>kcat_code(@"6D):=kanji; { Bopomofo }
+  @t\hskip10pt@>kcat_code(@"6E):=hangul; { Hangul Compatibility Jamo }
+  @+@t\1@>for k:=@"6F to @"71 do kcat_code(k):=kanji; { Kanbun .. CJK Strokes }
+  @t\hskip10pt@>kcat_code(@"72):=kana; { Katakana Phonetic Extensions }
+  @t\hskip10pt@>kcat_code(@"75):=kanji; { CJK Unified Ideographs Extension A }
+  @t\hskip10pt@>kcat_code(@"77):=kanji; { CJK Unified Ideographs }
+  @t\hskip10pt@>kcat_code(@"87):=hangul; { Hangul Jamo Extended-A }
+  @t\hskip10pt@>kcat_code(@"92):=hangul; { Hangul Syllables }
+  @t\hskip10pt@>kcat_code(@"93):=hangul; { Hangul Jamo Extended-B }
+  @t\hskip10pt@>kcat_code(@"98):=kanji; { CJK Compatibility Ideographs }
+  { \hskip10pt|kcat_code(@"A1):=other_kchar;| Halfwidth and Fullwidth Forms }
+  @+@t\1@>for k:=@"103 to @"105 do kcat_code(k):=kana; { Kana Supplement .. Small Kana Extension }
+  @+@t\1@>for k:=@"129 to @"12F do kcat_code(k):=kanji; { CJK Unified Ideographs Extension B .. G }
   @t\hskip10pt@>kcat_code(@"1FD):=not_cjk; { Latin-1 Letters }
   @t\hskip10pt@>kcat_code(@"1FE):=kana; { Fullwidth digit and latin alphabet }
   @t\hskip10pt@>kcat_code(@"1FF):=kana; { Halfwidth katakana }
@@ -698,16 +703,24 @@ uptex_revision_code: print(upTeX_revision);
 
 @x
 if (cur_cmd=kanji)or(cur_cmd=kana)or(cur_cmd=other_kchar) then
+  begin n:=cur_chr; m:=kcat_code(kcatcodekey(n));
+  end
 @y
 if (cur_cmd>=kanji)and(cur_cmd<=hangul) then
+  begin m:=cur_cmd; n:=cur_chr;
+  end
 @z
 
 @x
 get_x_token_or_active_char;
 if (cur_cmd=kanji)or(cur_cmd=kana)or(cur_cmd=other_kchar) then
+  begin cur_cmd:=kcat_code(kcatcodekey(cur_chr));
+  end
 @y
 get_x_token_or_active_char;
 if (cur_cmd>=kanji)and(cur_cmd<=hangul) then
+  begin cur_cmd:=cur_cmd;
+  end {dummy}
 @z
 
 @x
@@ -1079,20 +1092,6 @@ if (t<cs_token_flag+single_base)and(not check_kanji(t)) then
 t:=info(p);
 if (t<cs_token_flag+single_base)and(not check_kanji(t)) then
   begin c:=t mod max_char_val;
-@z
-
-@x
-libc_free(format_engine);@/
-@y
-libc_free(format_engine);@/
-dump_kanji(fmt_file);
-@z
-
-@x
-libc_free(format_engine);
-@y
-libc_free(format_engine);
-undump_kanji(fmt_file);
 @z
 
 @x

@@ -71,7 +71,7 @@ DEFS	=
 #
 #DEFS	+= ${DEFS} -DNO_MALLOC_DECL
 #
-CFLAGS	= -O ${DEFS} -Wall
+CFLAGS	= -O -DVERSION=\"${VERSION}\" ${DEFS} -Wall
 
 # Use your favorite lexical scanner
 #
@@ -105,7 +105,7 @@ SRC	= detex.l
 #
 D_OBJ	= detex.o
 
-VERSION = 2.8.4
+VERSION = 2.8.7
 
 all:	${PROGS}
 
@@ -120,14 +120,14 @@ detex.c: detex.l
 	mv lex.yy.c detex.c
 
 man-page:
-	troff -man detex.1l
+	troff -man detex.1
 
 # If you want detex available as delatex, uncomment the last two lines of
 # this target
 install: all
 	rm -f ${DESTDIR}/detex
 	install -c -m 775 -g staff -s detex ${DESTDIR}
-	install detex.1l /usr/local/share/man/man1
+	install detex.1 /usr/local/share/man/man1
 #	rm -f ${DESTDIR}/delatex
 #	ln ${DESTDIR}/detex ${DESTDIR}/delatex
 
@@ -151,7 +151,7 @@ run: delatex
 	./delatex in > out.txt
 
 package: clean detex.c
-	tar cjfv opendetex-${VERSION}.tar.bz2 ChangeLog COPYRIGHT detex.* INSTALL Makefile README
+	tar cjfv opendetex-${VERSION}.tar.bz2 --exclude='*.o' ChangeLog COPYRIGHT detex.* INSTALL Makefile README
 
 # Dependencies
 #

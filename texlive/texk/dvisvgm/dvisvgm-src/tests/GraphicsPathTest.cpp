@@ -2,7 +2,7 @@
 ** GraphicsPathTest.cpp                                                 **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -22,7 +22,7 @@
 #include <sstream>
 #include "GraphicsPath.hpp"
 
-using std::ostringstream;
+using namespace std;
 
 TEST(GraphicsPathTest, svg) {
 	GraphicsPath<int> path;
@@ -92,7 +92,7 @@ TEST(GraphicsPathTest, relative1) {
 	path.lineto(10,10);
 	path.lineto(10,20);
 	path.cubicto(20,20,30,30,40,40);
-	path.conicto(50, 50, 60, 60);
+	path.quadto(50, 50, 60, 60);
 	path.lineto(100,60);
 	path.closepath();
 	ostringstream oss;
@@ -105,12 +105,11 @@ TEST(GraphicsPathTest, computeBBox) {
 	GraphicsPath<int> path;
 	path.moveto(10,10);
 	path.lineto(100,10);
-	path.conicto(10,100,40,80);
+	path.quadto(10, 100, 40, 80);
 	path.cubicto(5,5,30,10,90,70);
 	path.lineto(20,30);
 	path.closepath();
-	BoundingBox bbox;
-	path.computeBBox(bbox);
+	BoundingBox bbox = path.computeBBox();
 	EXPECT_EQ(bbox, BoundingBox(5, 5, 100, 100));
 }
 
@@ -119,7 +118,7 @@ TEST(GraphicsPathTest, removeRedundantCommands) {
 	GraphicsPath<int> path;
 	path.moveto(10,10);
 	path.lineto(100,10);
-	path.conicto(10,100,40,80);
+	path.quadto(10, 100, 40, 80);
 	path.cubicto(5,5,30,10,90,70);
 	path.moveto(10,10);
 	path.moveto(15,10);
@@ -131,4 +130,135 @@ TEST(GraphicsPathTest, removeRedundantCommands) {
 	ostringstream oss;
 	path.writeSVG(oss, false);
 	EXPECT_EQ(oss.str(), "M10 10H100Q10 100 40 80C5 5 30 10 90 70M20 20V30");
+}
+
+TEST(GraphicsPathTest, cmd_equals) {
+	using Point = Pair<int>;
+	gp::MoveTo<int> m1(Point(1, 2));
+	gp::MoveTo<int> m2(Point(1, 2));
+	gp::MoveTo<int> m3(Point(2, 1));
+	EXPECT_EQ(m1, m2);
+	EXPECT_EQ(m2, m1);
+	EXPECT_NE(m1, m3);
+	EXPECT_NE(m3, m1);
+	gp::LineTo<int> l1(Point(1, 2));
+	EXPECT_NE(l1, m1);
+	EXPECT_NE(m1, l1);
+	gp::CubicTo<int> c1(Point(1, 2), Point(3, 4), Point(5, 6));
+	gp::CubicTo<int> c2(Point(1, 2), Point(3, 4), Point(5, 6));
+	gp::CubicTo<int> c3(Point(1, 2), Point(0, 4), Point(5, 6));
+	EXPECT_EQ(c1, c2);
+	EXPECT_EQ(c2, c1);
+	EXPECT_NE(c1, c3);
+	EXPECT_NE(c3, c1);
+}
+
+
+TEST(GraphicsPathTest, equals) {
+	GraphicsPath<int> path1;
+	EXPECT_TRUE(path1 == path1);
+	path1.moveto(10,10);
+	path1.lineto(100,10);
+	path1.quadto(10, 100, 40, 80);
+	path1.cubicto(5,5,30,10,90,70);
+	path1.lineto(20,30);
+	path1.closepath();
+	EXPECT_TRUE(path1 == path1);
+
+	GraphicsPath<int> path2;
+	EXPECT_FALSE(path1 == path2);
+	path2.moveto(10,10);
+	path2.lineto(100,10);
+	path2.quadto(10, 100, 40, 80);
+	path2.cubicto(5,5,30,10,90,70);
+	path2.lineto(20,30);
+	EXPECT_FALSE(path1 == path2);
+	EXPECT_FALSE(path2 == path1);
+	path2.closepath();
+	EXPECT_TRUE(path1 == path2);
+	EXPECT_TRUE(path2 == path1);
+
+	path2.clear();
+	path2.moveto(10,10);
+	path2.lineto(100,10);
+	path2.quadto(10, 100, 40, 80);
+	path2.cubicto(5,5,10,10,90,70);
+	path2.lineto(20,30);
+	path2.closepath();
+	EXPECT_FALSE(path1 == path2);
+	EXPECT_FALSE(path2 == path1);
+}
+
+
+TEST(GraphicsPathTest, unequals) {
+	GraphicsPath<int> path1;
+	EXPECT_FALSE(path1 != path1);
+	path1.moveto(10,10);
+	path1.lineto(100,10);
+	path1.quadto(10, 100, 40, 80);
+	path1.cubicto(5,5,30,10,90,70);
+	path1.lineto(20,30);
+	path1.closepath();
+	EXPECT_FALSE(path1 != path1);
+
+	GraphicsPath<int> path2;
+	EXPECT_TRUE(path1 != path2);
+	path2.moveto(10,10);
+	path2.lineto(100,10);
+	path2.quadto(10, 100, 40, 80);
+	path2.cubicto(5,5,30,10,90,70);
+	path2.lineto(20,30);
+	EXPECT_TRUE(path1 != path2);
+	EXPECT_TRUE(path2 != path1);
+	path2.closepath();
+	EXPECT_FALSE(path1 != path2);
+	EXPECT_FALSE(path2 != path1);
+
+	path2.clear();
+	path2.moveto(10,10);
+	path2.lineto(100,10);
+	path2.quadto(10, 100, 40, 80);
+	path2.cubicto(5,5,10,10,90,70);
+	path2.lineto(20,30);
+	path2.closepath();
+	EXPECT_TRUE(path1 != path2);
+	EXPECT_TRUE(path2 != path1);
+}
+
+
+TEST(GraphicsPathTest, approximate_arcs) {
+	GraphicsPath<double> path;
+	XMLString::DECIMAL_PLACES = 2;
+	path.moveto(10, 10);
+	path.lineto(20, 0);
+	path.arcto(30, 20, 20, 1, 1, DPair(50, 50));
+	ostringstream oss;
+	path.writeSVG(oss, false);
+	EXPECT_EQ(oss.str(), "M10 10L20 0A30 20 20 1 1 50 50");
+	path.approximateArcs();
+	oss.str("");
+	path.writeSVG(oss, false);
+	EXPECT_EQ(oss.str(), "M10 10L20 0C25.05-7.15 34.02-8.12 42.72-2.44S58.14 14.42 59.73 25.91S57.48 46.9 50 50");
+}
+
+
+TEST(GraphicsPathTest, smooth_quadto) {
+	GraphicsPath<int> path;
+	path.moveto(10, 10);
+	path.quadto(DPair(30, 20), DPair(40, 10));
+	path.quadto(DPair(100, 30));
+	ostringstream oss;
+	path.writeSVG(oss, false);
+	EXPECT_EQ(oss.str(), "M10 10Q30 20 40 10T100 30");
+}
+
+
+TEST(GraphicsPathTest, smooth_cubicto) {
+	GraphicsPath<int> path;
+	path.moveto(10, 10);
+	path.cubicto(DPair(30, 20), DPair(40, 0), DPair(20, 50));
+	path.cubicto(DPair(80, 100), DPair(100, 30));
+	ostringstream oss;
+	path.writeSVG(oss, false);
+	EXPECT_EQ(oss.str(), "M10 10C30 20 40 0 20 50S80 100 100 30");
 }

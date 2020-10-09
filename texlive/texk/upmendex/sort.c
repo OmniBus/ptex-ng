@@ -311,21 +311,21 @@ static int get_charset_juncture(UChar *str)
 static int unescape(const unsigned char *src, UChar *dist)
 {
 	int i,j,k;
-	unsigned char tmp[STYBUFSIZE];
+	char tmp[STYBUFSIZE];
 
 	for (i=j=0;i<STYBUFSIZE;i++) {
 		if (src[i]=='\0') {
 			return i;
 		}
 		else if (src[i]< 0x80 && (src[i+1]>=0x80 || src[i+1]=='\0')) {
-			strncpy(tmp,&src[j],i-j+1);
+			strncpy(tmp,(char *)&src[j],i-j+1);
 			tmp[i-j+1]='\0';
 			k=u_strlen(dist);
 			u_unescape(tmp, &dist[k], STYBUFSIZE-k);
 			j=i+1;
 		}
 		else if (src[i]>=0x80 && (src[i+1]< 0x80 || src[i+1]=='\0')) {
-			strncpy(tmp,&src[j],i-j+1);
+			strncpy(tmp,(char *)&src[j],i-j+1);
 			tmp[i-j+1]='\0';
 			k=u_strlen(dist);
 			multibyte_to_widechar(&dist[k], STYBUFSIZE-k, tmp);
@@ -366,9 +366,18 @@ int is_numeric(UChar *c)
 
 int is_jpn_kana(UChar *c)
 {
+	UChar32 c32;
+
 	if      ((*c>=0x3040)&&(*c<=0x30FF)) return 1; /* Hiragana, Katakana */
 	else if ((*c>=0x31F0)&&(*c<=0x31FF)) return 1; /* Katakana Phonetic Extensions */
-	else return 0;
+
+	if (is_surrogate_pair(c)) {
+		c32=U16_GET_SUPPLEMENTARY(*c,*(c+1));
+		if ((c32>=0x1B130) && (c32<=0x1B16F)) return 2; /* Small Kana Extensions */
+	}
+	return 0;
+		/* ICU 65 does not seem to support
+		   "Kana Supplement" and "Kana Extended-A" yet. (2020/02/16) */
 }
 
 int is_kor_hngl(UChar *c)
@@ -399,7 +408,8 @@ int is_hanzi(UChar *c)
 	if (is_surrogate_pair(c)) {
 		c32=U16_GET_SUPPLEMENTARY(*c,*(c+1));
 		if ((c32>=0x20000) &&         /* CJK Unified Ideographs Extension B,C,D,E,F */
-		    (c32<=0x2FA1F)) return 2; /* CJK Compatibility Ideographs Supplement */
+		                              /* CJK Compatibility Ideographs Supplement */
+		    (c32<=0x3134F)) return 2; /* CJK Unified Ideographs Extension G */
 	}
 	return 0;
 }

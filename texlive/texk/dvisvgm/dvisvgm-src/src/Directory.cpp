@@ -2,7 +2,7 @@
 ** Directory.cpp                                                        **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -22,35 +22,20 @@
 
 using namespace std;
 
-#ifdef _WIN32
-	#include "windows.hpp"
-#else
-	#include <errno.h>
+#ifndef _WIN32
+	#include <cerrno>
 	#include <sys/stat.h>
 #endif
 
 
 Directory::Directory () {
-#if _WIN32
-	_handle = INVALID_HANDLE_VALUE;
-	_firstread = true;
+#ifdef _WIN32
 	memset(&_fileData, 0, sizeof(WIN32_FIND_DATA));
-#else
-	_dir = nullptr;
-	_dirent = nullptr;
 #endif
 }
 
 
-Directory::Directory (const string &dirname) {
-#if _WIN32
-	_handle = INVALID_HANDLE_VALUE;
-	_firstread = true;
-	memset(&_fileData, 0, sizeof(WIN32_FIND_DATA));
-#else
-	_dir = nullptr;
-	_dirent = nullptr;
-#endif
+Directory::Directory (const string &dirname) : Directory() {
 	open(dirname);
 }
 

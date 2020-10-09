@@ -947,7 +947,7 @@ static void init_pdf_outputparameters(PDF pdf)
     pdf->inclusion_copy_font = fix_int(pdf_inclusion_copy_font, 0, 1);
     pdf->pk_resolution = fix_int(pdf_pk_resolution, 72, 8000);
     pdf->pk_fixed_dpi = fix_int(pdf_pk_fixed_dpi, 0, 1);
-    if ((pdf->minor_version >= 5) && (pdf->objcompresslevel > 0)) {
+    if (((pdf->major_version > 1) || (pdf->minor_version >= 5)) && (pdf->objcompresslevel > 0)) {
         pdf->os_enable = true;
     } else {
         if (pdf->objcompresslevel > 0) {
@@ -1777,7 +1777,12 @@ void pdf_end_page(PDF pdf)
     if (callback_id > 0)
       run_callback(callback_id, "b->",(global_shipping_mode == SHIPPING_PAGE));
     if (global_shipping_mode == SHIPPING_PAGE) {
-        pdf->last_pages = pdf_do_page_divert(pdf, pdf->last_page, 0);
+        int location = 0;
+        int callback_id = callback_defined(page_order_index_callback);
+        if (callback_id) {
+            run_callback(callback_id, "d->d", total_pages, &location);
+        }
+        pdf->last_pages = pdf_do_page_divert(pdf, pdf->last_page, location);
         /*tex  Write out the |/Page| object. */
         pdf_begin_obj(pdf, pdf->last_page, OBJSTM_ALWAYS);
         pdf_begin_dict(pdf);
@@ -2182,6 +2187,7 @@ void pdf_finish_file(PDF pdf, int fatal_error) {
         int outlines = 0;
         int threads = 0;
         int names_tree = 0;
+        int prerolled = 0;
         size_t xref_offset_width;
         int luatexversion = luatex_version;
         str_number luatexrevision = get_luatexrevision();
@@ -2210,13 +2216,46 @@ void pdf_finish_file(PDF pdf, int fatal_error) {
                     check_nonexisting_pages(pdf);
                     check_nonexisting_destinations(pdf);
                 }
-                /*tex Output fonts definition. */
+                /*tex
+                    Output fonts definition.
+                */
+                pdf->gen_tounicode = pdf_gen_tounicode;
+                pdf->omit_cidset = pdf_omit_cidset;
+                pdf->omit_charset = pdf_omit_charset;
+                /*tex
+                    The first pass over the list will flag the slots that are
+                    used so that we can do a preroll for type 3 fonts.
+                */
                 for (k = 1; k <= max_font_id(); k++) {
                     if (font_used(k) && (pdf_font_num(k) < 0)) {
                         i = -pdf_font_num(k);
                         for (j = font_bc(k); j <= font_ec(k); j++)
                             if (quick_char_exists(k, j) && pdf_char_marked(k, j))
                                 pdf_mark_char(i, j);
+                    }
+                }
+                k = pdf->head_tab[obj_type_font];
+                while (k != 0) {
+                    int f = obj_info(pdf, k);
+                    if (do_pdf_preroll_font(pdf, f)) {
+                        prerolled = 1;
+                    }
+                    k = obj_link(pdf, k);
+                }
+                /*tex
+                    Just in case the user type 3 font has used fonts, we need to
+                    do a second pass. We also collect some additional data here.
+                */
+                for (k = 1; k <= max_font_id(); k++) {
+                    if (font_used(k) && (pdf_font_num(k) < 0)) {
+                        i = -pdf_font_num(k);
+                        if (prerolled) {
+                            for (j = font_bc(k); j <= font_ec(k); j++)
+                                if (quick_char_exists(k, j) && pdf_char_marked(k, j))
+                                    pdf_mark_char(i, j);
+                        } else {
+                            /*tex No need to waste time on checking again. */
+                        }
                         if ((pdf_font_attr(i) == 0) && (pdf_font_attr(k) != 0)) {
                             set_pdf_font_attr(i, pdf_font_attr(k));
                         } else if ((pdf_font_attr(k) == 0) && (pdf_font_attr(i) != 0)) {
@@ -2226,9 +2265,6 @@ void pdf_finish_file(PDF pdf, int fatal_error) {
                         }
                     }
                 }
-                pdf->gen_tounicode = pdf_gen_tounicode;
-                pdf->omit_cidset = pdf_omit_cidset;
-                pdf->omit_charset = pdf_omit_charset;
                 k = pdf->head_tab[obj_type_font];
                 while (k != 0) {
                     int f = obj_info(pdf, k);
@@ -2236,6 +2272,9 @@ void pdf_finish_file(PDF pdf, int fatal_error) {
                     k = obj_link(pdf, k);
                 }
                 write_fontstuff(pdf);
+                /*tex
+                    We're done with the fonts.
+                */
                 if (total_pages > 0) {
                     pdf->last_pages = output_pages_tree(pdf);
                     /*tex Output outlines. */
@@ -2482,14 +2521,17 @@ void scan_pdfcatalog(PDF pdf)
     real conforming to the implementation limits of \PDF\ as specified in
     appendix C.1 of the \PDF\ standard. The maximum value of ints is |+2^32|, the
     maximum value of reals is |+2^15| and the smallest values of reals is
-    |1/(2^16)|.
+    |1/(2^16)|. We are quite large on precision, because it could happen that a
+    pdf file imported as figure has real numbers with an unusual (and possibly useless)
+    high precision. Later the formatter will write the numbers in the correct format.
 
 */
 
 static pdffloat conv_double_to_pdffloat(double n)
 {
     pdffloat a;
-    a.e = 6;
+/*  was  a.e = 6; */
+    a.e = 9 ;
     a.m = i64round(n * ten_pow[a.e]);
     return a;
 }

@@ -24,6 +24,10 @@
  * Google Author(s): Behdad Esfahbod
  */
 
+#include "hb.hh"
+
+#ifndef HB_NO_OT_SHAPE
+
 #include "hb-ot-shape-complex.hh"
 
 
@@ -218,6 +222,10 @@ do_thai_pua_shaping (const hb_ot_shape_plan_t *plan HB_UNUSED,
 		     hb_buffer_t              *buffer,
 		     hb_font_t                *font)
 {
+#ifdef HB_NO_OT_SHAPE_COMPLEX_THAI_FALLBACK
+  return;
+#endif
+
   thai_above_state_t above_state = thai_above_start_state[NOT_CONSONANT];
   thai_below_state_t below_state = thai_below_start_state[NOT_CONSONANT];
   unsigned int base = 0;
@@ -357,8 +365,7 @@ preprocess_text_thai (const hb_ot_shape_plan_t *plan,
 	buffer->merge_out_clusters (start - 1, end);
     }
   }
-  if (likely (buffer->successful))
-    buffer->swap_buffers ();
+  buffer->swap_buffers ();
 
   /* If font has Thai GSUB, we are done. */
   if (plan->props.script == HB_SCRIPT_THAI && !plan->map.found_script[0])
@@ -382,3 +389,6 @@ const hb_ot_complex_shaper_t _hb_ot_complex_shaper_thai =
   HB_OT_SHAPE_ZERO_WIDTH_MARKS_BY_GDEF_LATE,
   false,/* fallback_position */
 };
+
+
+#endif

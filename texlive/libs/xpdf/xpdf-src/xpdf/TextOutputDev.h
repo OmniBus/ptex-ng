@@ -22,9 +22,11 @@
 
 class GList;
 class UnicodeMap;
+class UnicodeRemapping;
 
 class TextBlock;
 class TextChar;
+class TextGaps;
 class TextLink;
 class TextPage;
 
@@ -68,6 +70,10 @@ public:
   GBool discardClippedText;	// discard all clipped characters
   GBool insertBOM;		// insert a Unicode BOM at the start of
 				//   the text output
+  double marginLeft,		// characters outside the margins are
+         marginRight,		//   discarded
+         marginTop,
+         marginBottom;
 };
 
 //------------------------------------------------------------------------
@@ -390,6 +396,9 @@ public:
 		      double *xMin, double *yMin,
 		      double *xMax, double *yMax);
 
+  // Returns true if x,y falls inside a column.
+  GBool checkPointInside(double x, double y);
+
   // Find a point inside a column.  Returns false if x,y fall outside
   // all columns.
   GBool findPointInside(double x, double y, TextPosition *pos);
@@ -424,6 +433,11 @@ public:
 
   // Build a flat word list, in the specified ordering.
   TextWordList *makeWordList();
+
+  // Build a word list containing only words inside the specified
+  // rectangle.
+  TextWordList *makeWordListForRect(double xMin, double yMin,
+				    double xMax, double yMax);
 
   // Returns true if the primary character direction is left-to-right,
   // false if it is right-to-left.
@@ -493,7 +507,7 @@ private:
 		double *xMinOut, double *yMinOut,
 		double *xMaxOut, double *yMaxOut,
 		double *avgFontSizeOut,
-		GList *horizGaps, GList *vertGaps);
+		TextGaps *horizGaps, TextGaps *vertGaps);
   void tagBlock(TextBlock *blk);
   void insertLargeChars(GList *largeChars, TextBlock *blk);
   void insertLargeCharsInFirstLeaf(GList *largeChars, TextBlock *blk);
@@ -532,7 +546,14 @@ private:
   void dumpUnderlines();
 #endif
 
+  // word list
+  TextWordList *makeWordListForChars(GList *charList);
+
   TextOutputControl control;	// formatting parameters
+
+  UnicodeRemapping *remapping;
+  Unicode *uBuf;
+  int uBufSize;
 
   double pageWidth, pageHeight;	// width and height of current page
   int charPos;			// next character position (within content
@@ -685,6 +706,11 @@ public:
   // this->physLayout is true and this->rawOrder is false), or reading
   // order (if both flags are false).
   TextWordList *makeWordList();
+
+  // Build a word list containing only words inside the specified
+  // rectangle.
+  TextWordList *makeWordListForRect(double xMin, double yMin,
+				    double xMax, double yMax);
 
   // Returns the TextPage object for the last rasterized page,
   // transferring ownership to the caller.

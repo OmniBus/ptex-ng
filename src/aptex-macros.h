@@ -1,5 +1,5 @@
 /*
-   Copyright 2014, 2015, 2016, 2017, 2018 Clerk Ma
+   Copyright 2014, 2015, 2016, 2017, 2018, 2019, 2020 Clerk Ma
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -22,19 +22,19 @@
 
 #define pTeX_version 3
 #define pTeX_minor_version 8
-#define pTeX_revision ".0"
-#define pTeX_version_string "-p3.8.1"
+#define pTeX_revision ".3"
+#define pTeX_version_string "-p3.8.3"
 
 #define upTeX_version 1
-#define upTeX_revision ".23"
-#define upTeX_version_string "-u1.23"
+#define upTeX_revision ".26"
+#define upTeX_version_string "-u1.26"
 
 #define eTeX_version        2         // { \.{\\eTeXversion} }
 #define eTeX_revision       ".6"      // { \.{\\eTeXrevision} }
 #define eTeX_version_string "-2.6"    // {current \eTeX\ version}
 
-#define epTeX_version_string "-180901"
-#define epTeX_version_number 180901
+#define epTeX_version_string "-190908"
+#define epTeX_version_number 190908
 
 #define TeXXeT_code         0         // {the \TeXXeT\ feature is optional}
 #define eTeX_states         1         // {number of \eTeX\ state variables in |eqtb|}
@@ -106,6 +106,12 @@ enum
 /* sec 0101 */
 #define unity 0200000 // {$2^{16}$, represents 1.00000}
 #define two   0400000 // {$2^{17}$, represents 2.00000}
+/* sec 0095 @ metafont */
+#define el_gordo 017777777777
+/* sec 0105 @ metafont */
+#define fraction_half 01000000000  // {$2^{27}$, represents 0.50000000}
+#define fraction_one  02000000000  // {$2^{28}$, represents 1.00000000}
+#define fraction_four 010000000000 // {$2^{30}$, represents 4.00000000}
 /* sec 0105 */
 #define nx_plus_y(a, b, c)  mult_and_add(a, b, c, 07777777777)
 #define mult_integers(a, b) mult_and_add(a, b, 0, 017777777777)
@@ -510,6 +516,7 @@ enum
 #define prev_disp       cur_list.pdisp_field        // {displacemant at |prev_node|}
 #define last_jchr       cur_list.last_jchr_field    // {final jchar node on current list}
 #define disp_called     cur_list.disp_called_field  // {is a |disp_node| present in the current list?}
+#define inhibit_glue_flag cur_list.inhibit_glue_flag_field // {is \.{inhibitglue} is specified at the current list?}
 #define eTeX_aux        cur_list.eTeX_aux_field     // {auxiliary data for \eTeX}
 #define LR_save         eTeX_aux                    // {LR stack when a paragraph is interrupted}
 #define LR_box          eTeX_aux                    // {prototype box for display}
@@ -546,7 +553,10 @@ enum
 #define frozen_relax                  (frozen_control_sequence + 7)     // {permanent `\.{\\relax}'}
 #define end_write                     (frozen_control_sequence + 8)     // {permanent `\.{\\endwrite}'}
 #define frozen_dont_expand            (frozen_control_sequence + 9)     // {permanent `\.{\\notexpanded:}'}
-#define frozen_null_font              (frozen_control_sequence + 10)    // {permanent `\.{\\nullfont}'}
+#define frozen_primitive              (frozen_control_sequence + 10)    // {permanent `\.{\\pdfprimitive}'}
+#define prim_eqtb_base                (frozen_primitive + 1)
+#define prim_size                     2100                              // {maximum number of primitives }
+#define frozen_null_font              (prim_eqtb_base + prim_size + 1)  // {permanent `\.{\\nullfont}'}
 #define font_id_base                  (frozen_null_font - font_base)    // {begins table of 257 permanent font identifiers}
 #define undefined_control_sequence    (frozen_null_font + font_max + 2) // {dummy location}
 #define glue_base                     (undefined_control_sequence + 1)  // {beginning of region 3}
@@ -758,9 +768,10 @@ enum
 #define eTeX_state_code               69  // {\eTeX\ state variables}
 #define tracing_fontloaders_code      70
 #define pdf_compress_level_code       71
-#define pdf_minor_version_code        72
-#define synctex_code                  73
-#define int_pars                      74
+#define pdf_major_version_code        72
+#define pdf_minor_version_code        73
+#define synctex_code                  74
+#define int_pars                      75
 #define count_base                    (int_base + int_pars) // {256 user \.{\\count} registers}
 #define del_code_base                 (count_base + 256)    // {256 delimiter code mappings}
 #define dimen_base                    (del_code_base + 256) // {beginning of region 6}
@@ -841,6 +852,7 @@ enum
 #define saving_vdiscards              int_par(saving_vdiscards_code)
 #define saving_hyph_codes             int_par(saving_hyph_codes_code)
 #define pdf_compress_level            int_par(pdf_compress_level_code)
+#define pdf_major_version             int_par(pdf_major_version_code)
 #define pdf_minor_version             int_par(pdf_minor_version_code)
 #define synctex                       int_par(synctex_code)
 /* sec 0247 */
@@ -911,6 +923,20 @@ enum
 #define text(a)         hash[a].rh  // {string number for control sequence name}
 #define hash_is_full    (hash_used == hash_base)  // {test if all positions are occupied}
 #define font_id_text(a) text(font_id_base + a)    // {a frozen font identifier's name}
+// #
+#define prim_prime 1777 // {about 85\pct! of |primitive_size|}
+#define prim_base 1
+#define prim_next(a) prim[a].lh // {link for coalesced lists}
+#define prim_text(a) prim[a].rh // {string number for control sequence name, plus one}
+#define prim_is_full (prim_used == prim_base) // {test if all positions are occupied}
+#define prim_eq_level_field(a) a.hh.b1
+#define prim_eq_type_field(a) a.hh.b0
+#define prim_equiv_field(a) a.hh.rh
+#define prim_eq_level(a) prim_eq_level_field(eqtb[prim_eqtb_base+a]) // {level of definition}
+#define prim_eq_type(a) prim_eq_type_field(eqtb[prim_eqtb_base+a]) // {command code for equivalent}
+#define prim_equiv(a) prim_equiv_field(eqtb[prim_eqtb_base+a]) // {equivalent value}
+#define undefined_primitive 0
+#define biggest_char 255 // { 65535 in XeTeX }
 /* sec 0268 */
 #define save_type(a)      save_stack[a].hh.b0 // {classifies a |save_stack| entry}
 #define save_level(a)     save_stack[a].hh.b1 // {saved level for regions 5 and 6, or group code}
@@ -1130,31 +1156,38 @@ do {                            \
 #define ptex_minor_version_code   (ptex_version_code + 1)   // {code for \.{\\ptexminorversion}}
 #define uptex_version_code        (ptex_minor_version_code + 1) // {code for \.{\\uptexversion}}
 #define eptex_version_code        (uptex_version_code + 1)      // {code for \.{\\epTeXversion}}
+#define pdf_last_x_pos_code       (eptex_version_code + 1)      // {code for \.{\\pdflastxpos}}
+#define pdf_last_y_pos_code       (pdf_last_x_pos_code + 1)     // {code for \.{\\pdflastypos}}
+#define elapsed_time_code         (pdf_last_y_pos_code + 1)     // {code for \.{\\elapsedtime}}
+#define random_seed_code          (elapsed_time_code + 1)       // {code for \.{\\randomseed}}
 //
-#define eTeX_int                  (badness_code + 6)        // {first of \eTeX\ codes for integers}
-#define eTeX_version_code         eTeX_int                  // 
-#define current_group_level_code  (eTeX_int + 1)
-#define current_group_type_code   (eTeX_int + 2)
-#define current_if_level_code     (eTeX_int + 3)
-#define current_if_type_code      (eTeX_int + 4)
-#define current_if_branch_code    (eTeX_int + 5)
-#define glue_stretch_order_code   (eTeX_int + 6)
-#define glue_shrink_order_code    (eTeX_int + 7)
-#define eTeX_dim                  (eTeX_int + 8)
-#define font_char_wd_code         eTeX_dim
-#define font_char_ht_code         (eTeX_dim + 1)
-#define font_char_dp_code         (eTeX_dim + 2)
-#define font_char_ic_code         (eTeX_dim + 3)
-#define par_shape_length_code     (eTeX_dim + 4)
-#define par_shape_indent_code     (eTeX_dim + 5)
-#define par_shape_dimen_code      (eTeX_dim + 6)
-#define glue_stretch_code         (eTeX_dim + 7)
-#define glue_shrink_code          (eTeX_dim + 8)
-#define eTeX_glue                 (eTeX_dim + 9)
-#define eTeX_mu                   (eTeX_glue + 1)
-#define mu_to_glue_code           eTeX_glue
-#define glue_to_mu_code           eTeX_mu
-#define eTeX_expr                 (eTeX_mu + 1)
+#define eTeX_int                   (badness_code + 10)        // {first of \eTeX\ codes for integers}
+#define eTeX_version_code          eTeX_int                  // 
+#define current_group_level_code   (eTeX_int + 1)
+#define current_group_type_code    (eTeX_int + 2)
+#define current_if_level_code      (eTeX_int + 3)
+#define current_if_type_code       (eTeX_int + 4)
+#define current_if_branch_code     (eTeX_int + 5)
+#define glue_stretch_order_code    (eTeX_int + 6)
+#define glue_shrink_order_code     (eTeX_int + 7)
+#define current_spacing_mode_code  (eTeX_int + 8)
+#define current_xspacing_mode_code (eTeX_int + 9)
+#define current_cjk_token_code     (eTeX_int + 10)
+#define eTeX_dim                   (eTeX_int + 11)
+#define font_char_wd_code          eTeX_dim
+#define font_char_ht_code          (eTeX_dim + 1)
+#define font_char_dp_code          (eTeX_dim + 2)
+#define font_char_ic_code          (eTeX_dim + 3)
+#define par_shape_length_code      (eTeX_dim + 4)
+#define par_shape_indent_code      (eTeX_dim + 5)
+#define par_shape_dimen_code       (eTeX_dim + 6)
+#define glue_stretch_code          (eTeX_dim + 7)
+#define glue_shrink_code           (eTeX_dim + 8)
+#define eTeX_glue                  (eTeX_dim + 9)
+#define eTeX_mu                    (eTeX_glue + 1)
+#define mu_to_glue_code            eTeX_glue
+#define glue_to_mu_code            eTeX_mu
+#define eTeX_expr                  (eTeX_mu + 1)
 /* sec 0421 */
 #define max_dimen 07777777777
 /* sec 0438 */
@@ -1189,12 +1222,22 @@ do {                          \
 #define kuten_code          9  // {command code for \.{\\kuten}}
 #define ucs_code            10 // {command code for \.{\\ucs}}
 #define eTeX_revision_code  11 // {base for \eTeX's command codes}
-#define ng_strcmp_code      12 //
-#define ng_banner_code      13 //
-#define ng_os_type_code     14 //
+#define ng_strcmp_code      12 // {command code for \.{\\pdfstrcmp}}
+#define ng_banner_code      13 // {command code for \.{\\ngbanner}}
+#define ng_os_type_code     14 // {command code for \.{\\ngostype}}
 #define ptex_revision_code  15 // {command code for \.{\\ptexrevision}}
 #define uptex_revision_code 16 // {command code for \.{\\uptexrevision}}
-#define job_name_code       17 //
+#define pdf_creation_date_code   17 // {command code for \.{\\pdfcreationdate}}
+#define pdf_file_mod_date_code   18 // {command code for \.{\\pdffilemodedate}}
+#define pdf_file_size_code       19 // {command code for \.{\\pdffilesize}}
+#define pdf_mdfive_sum_code      20 // {command code for \.{\\pdfmdfivesum}}
+#define pdf_file_dump_code       21 // {command code for \.{\\pdffiledump}}
+#define pdf_uniform_deviate_code 22 // {command code for \.{\\pdfuniformdeviate}}
+#define pdf_normal_deviate_code  23 // {command code for \.{\\pdfnormaldeviate}}
+#define expanded_code            24 // {command code for \.{\\expanded}}
+#define Uchar_convert_code       25 // {command code for \.{\\Uchar}}
+#define Ucharcat_convert_code    26 // {command code for \.{\\Ucharcat}}
+#define job_name_code            27 // {command code for \.{\\jobname}}
 /* sec 0480 */
 #define closed    2
 #define just_open 1
@@ -1221,14 +1264,18 @@ do {                          \
 #define if_cs_code        18
 #define if_font_char_code 19
 //#
-#define if_tdir_code      (if_case_code + 4)
-#define if_ydir_code      (if_tdir_code + 1)
-#define if_ddir_code      (if_ydir_code + 1)
-#define if_mdir_code      (if_ddir_code + 1)
-#define if_tbox_code      (if_mdir_code + 1)
-#define if_ybox_code      (if_tbox_code + 1)
-#define if_dbox_code      (if_ybox_code + 1)
-#define if_mbox_code      (if_dbox_code + 1)
+#define if_in_csname_code     (if_case_code + 4)
+#define if_pdfprimitive_code  (if_in_csname_code + 1)
+#define if_tdir_code          (if_pdfprimitive_code + 1)
+#define if_ydir_code          (if_tdir_code + 1)
+#define if_ddir_code          (if_ydir_code + 1)
+#define if_mdir_code          (if_ddir_code + 1)
+#define if_tbox_code          (if_mdir_code + 1)
+#define if_ybox_code          (if_tbox_code + 1)
+#define if_dbox_code          (if_ybox_code + 1)
+#define if_mbox_code          (if_dbox_code + 1)
+#define if_jfont_code         (if_mbox_code + 1)
+#define if_tfont_code         (if_jfont_code + 1)
 /* sec 0489 */
 #define if_node_size     2
 #define if_line_field(a) mem[(a) + 1].cint
@@ -1985,6 +2032,9 @@ do {                                        \
 /* sec 1344 */
 #define immediate_code    4 // {command modifier for \.{\\immediate}}
 #define set_language_code 5 // {command modifier for \.{\\setlanguage}}
+#define pdf_save_pos_node 6
+#define reset_timer_code  7
+#define set_random_seed_code 8
 /* sec 1371 */
 #define end_write_token (cs_token_flag + end_write)
 // macros of pTeX
@@ -2871,7 +2921,7 @@ again_2:                                                \
                                                         \
     case inhibit_glue:                                  \
       {                                                 \
-        inhibit_glue_flag = true;                       \
+        inhibit_glue_flag = (cur_chr == 0);             \
         goto again_2;                                   \
       }                                                 \
       break;                                            \
@@ -2879,7 +2929,7 @@ again_2:                                                \
     default:                                            \
       {                                                 \
         ins_kp = max_halfword;                          \
-        cur_l = 0;                                      \
+        cur_l = -1;                                     \
         cur_r = non_char;                               \
         lig_stack = null;                               \
       }                                                 \
@@ -2956,6 +3006,8 @@ do {                                                              \
                                                                   \
   if (inhibit_glue_flag != true)                                  \
   {                                                               \
+    /*{ prints("IF"); print_int(cur_l); }*/                       \
+    if (cur_l < 0) cur_l = 0; else inhibit_glue_flag = false;     \
     if ((tail == link(head)) && (!is_char_node(tail))             \
       && (type(tail) == disp_node))                               \
       goto skip_loop;                                             \
@@ -3031,7 +3083,12 @@ do {                                                              \
       }                                                           \
     }                                                             \
   }                                                               \
-skip_loop: inhibit_glue_flag = false;                             \
+  else                                                            \
+  {                                                               \
+    /*{ prints("IF"); print_int(cur_l); }*/                       \
+    if (cur_l < 0) cur_l = 0; else inhibit_glue_flag = false;     \
+  }                                                               \
+skip_loop: do_nothing();                                          \
 } while (0)
 
 // eTeX
@@ -3440,5 +3497,10 @@ do {                                        \
 #define tail_page_disc  disc_ptr[copy_code]
 #define page_disc       disc_ptr[last_box_code]
 #define split_disc      disc_ptr[vsplit_code]
+
+#define illegal_Ucharcat_ascii_catcode(a) \
+  (a<left_brace)||(a>active_char)||(a==out_param)||(a==ignore)
+#define illegal_Ucharcat_wchar_catcode(a) \
+  (a<kanji)||(a>hangul)
 
 #endif

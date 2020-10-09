@@ -1,3 +1,28 @@
+2019-12-09  Martin Gieseking  <martin.gieseking@uos.de>
+
+	* Import 2.8.2.
+
+2019-11-19  Martin Gieseking  <martin.gieseking@uos.de>
+
+	* patch-04-configure-upstream, patch-08-makefiles, patch-09-woff-zlib:
+	adapt to 2.8.1.
+	* patch-10-psdefs: remove.
+
+2019-06-01  Karl Berry  <karl@freefriends.org>
+
+	* patch-10-psdefs: from Akira.
+
+2019-03-26  Karl Berry  <karl@freefriends.org>
+
+	* patch-09-woff-zlib: new file. From Mojca and Martin,
+	tlbuild 25 Mar 2019 21:03:53.
+
+2019-02-25  Karl Berry  <karl@freefriends.org>
+
+	* patch-08-makefiles (AM_CXXFLAGS): use WARNING_CXXFLAGS,
+	omit -Wno-mismatched-tags. From Vojta and Scherer,
+	tlbuild 24 Feb 2019 11:48:55.
+
 2018-08-30  Karl Berry  <karl@freefriends.org>
 
 	* patch-08-makefiles: adapt to 2.5.

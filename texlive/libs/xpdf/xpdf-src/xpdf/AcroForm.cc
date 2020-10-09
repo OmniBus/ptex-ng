@@ -875,14 +875,15 @@ void AcroFormField::drawNewAppearance(Gfx *gfx, Dict *annot,
   GString *appearBuf;
   Object appearance, mkObj, ftObj, appearDict, drObj, apObj, asObj;
   Object resources, fontResources, defaultFont, gfxStateDict;
-  Object obj1, obj2, obj3;
+  Object obj1, obj2, obj3, obj4;
   Dict *mkDict;
   MemStream *appearStream;
   GfxFontDict *fontDict;
   GBool hasCaption;
   double dx, dy, r;
-  GString *caption, *da;
+  GString *val, *caption, *da;
   GString **text;
+  GBool done;
   GBool *selection;
   AnnotBorderType borderType;
   double borderWidth;
@@ -1200,10 +1201,7 @@ void AcroFormField::drawNewAppearance(Gfx *gfx, Dict *annot,
     }
   } else if (ftObj.isName("Tx")) {
     //~ value strings can be Unicode
-    if (!fieldLookup("V", &obj1)->isString()) {
-      obj1.free();
-      fieldLookup("DV", &obj1);
-    }
+    fieldLookup("V", &obj1);
     if (obj1.isString()) {
       if (fieldLookup("Q", &obj2)->isInt()) {
 	quadding = obj2.getInt();
@@ -1235,9 +1233,30 @@ void AcroFormField::drawNewAppearance(Gfx *gfx, Dict *annot,
     // combo box
     if (flags & acroFormFlagCombo) {
       if (fieldLookup("V", &obj1)->isString()) {
-	drawText(obj1.getString(), da, fontDict,
+	val = obj1.getString()->copy();
+	if (fieldObj.dictLookup("Opt", &obj2)->isArray()) {
+	  for (i = 0, done = false; i < obj2.arrayGetLength() && !done; ++i) {
+	    obj2.arrayGet(i, &obj3);
+	    if (obj3.isArray() && obj3.arrayGetLength() == 2) {
+	      if (obj3.arrayGet(0, &obj4)->isString() &&
+		  obj4.getString()->cmp(val) == 0) {
+		obj4.free();
+		if (obj3.arrayGet(1, &obj4)->isString()) {
+		  delete val;
+		  val = obj4.getString()->copy();
+		}
+		done = gTrue;
+	      }
+	      obj4.free();
+	    }
+	    obj3.free();
+	  }
+	}
+	obj2.free();
+	drawText(val, da, fontDict,
 		 gFalse, 0, quadding, gTrue, gFalse, rot,
 		 xMin, yMin, xMax, yMax, borderWidth, appearBuf);
+	delete val;
 	//~ Acrobat draws a popup icon on the right side
       }
       obj1.free();
@@ -1470,6 +1489,12 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
   } else {
     text2 = text;
   }
+  if (text2->getLength() == 0) {
+    if (text2 != text) {
+      delete text2;
+    }
+    return;
+  }
 
   // parse the default appearance string
   tfPos = tmPos = -1;
@@ -1517,6 +1542,14 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
     fontSize = atof(tok->getCString());
   } else {
     error(errSyntaxError, -1, "Missing 'Tf' operator in field's DA string");
+    fontSize = 0;
+    if (!daToks) {
+      daToks = new GList();
+    }
+    tfPos = daToks->getLength();
+    daToks->append(new GString("/xpdf_default_font"));
+    daToks->append(new GString("10"));
+    daToks->append(new GString("Tf"));
   }
 
   // setup
@@ -1551,7 +1584,7 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 
     // compute font autosize
     if (fontSize == 0) {
-      for (fontSize = 20; fontSize > 1; --fontSize) {
+      for (fontSize = 10; fontSize > 1; --fontSize) {
 	y = dy - 3;
 	w2 = 0;
 	i = 0;
@@ -1564,7 +1597,7 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 	  y -= fontSize;
 	}
 	// approximate the descender for the last line
-	if (y >= 0.33 * fontSize) {
+	if (y >= 0.33 * fontSize && w <= wMax) {
 	  break;
 	}
       }
@@ -1578,7 +1611,11 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
     // starting y coordinate
     // (note: each line of text starts with a Td operator that moves
     // down a line)
-    y = dy - 3;
+    if (dy > fontSize + 6) {
+      y = dy - 3;
+    } else {
+      y = 0.5 * dy - 0.4 * fontSize + fontSize;
+    }
 
     // set the font matrix
     if (tmPos >= 0) {
@@ -1630,11 +1667,11 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 	c = text2->getChar(i) & 0xff;
 	if (c == '(' || c == ')' || c == '\\') {
 	  appearBuf->append('\\');
-	  appearBuf->append(c);
+	  appearBuf->append((char)c);
 	} else if (c < 0x20 || c >= 0x80) {
 	  appearBuf->appendf("\\{0:03o}", c);
 	} else {
-	  appearBuf->append(c);
+	  appearBuf->append((char)c);
 	}
       }
       appearBuf->append(") Tj\n");
@@ -1661,6 +1698,9 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 	  fontSize = w;
 	}
 	fontSize = floor(fontSize);
+	if (fontSize > 10) {
+	  fontSize = 10;
+	}
 	if (tfPos >= 0) {
 	  tok = (GString *)daToks->get(tfPos + 1);
 	  tok->clear();
@@ -1716,11 +1756,11 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 	c = text2->getChar(i) & 0xff;
 	if (c == '(' || c == ')' || c == '\\') {
 	  appearBuf->append('\\');
-	  appearBuf->append(c);
+	  appearBuf->append((char)c);
 	} else if (c < 0x20 || c >= 0x80) {
 	  appearBuf->appendf("{0:.4f} 0 Td\n", w);
 	} else {
-	  appearBuf->append(c);
+	  appearBuf->append((char)c);
 	}
 	appearBuf->append(") Tj\n");
       }
@@ -1747,6 +1787,9 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 	  fontSize = fontSize2;
 	}
 	fontSize = floor(fontSize);
+	if (fontSize > 10) {
+	  fontSize = 10;
+	}
 	if (tfPos >= 0) {
 	  tok = (GString *)daToks->get(tfPos + 1);
 	  tok->clear();
@@ -1798,11 +1841,11 @@ void AcroFormField::drawText(GString *text, GString *da, GfxFontDict *fontDict,
 	c = text2->getChar(i) & 0xff;
 	if (c == '(' || c == ')' || c == '\\') {
 	  appearBuf->append('\\');
-	  appearBuf->append(c);
+	  appearBuf->append((char)c);
 	} else if (c < 0x20 || c >= 0x80) {
 	  appearBuf->appendf("\\{0:03o}", c);
 	} else {
-	  appearBuf->append(c);
+	  appearBuf->append((char)c);
 	}
       }
       appearBuf->append(") Tj\n");
@@ -1900,6 +1943,9 @@ void AcroFormField::drawListBox(GString **text, GBool *selection,
       fontSize = fontSize2;
     }
     fontSize = floor(fontSize);
+    if (fontSize > 10) {
+      fontSize = 10;
+    }
     if (tfPos >= 0) {
       tok = (GString *)daToks->get(tfPos + 1);
       tok->clear();
@@ -1986,11 +2032,11 @@ void AcroFormField::drawListBox(GString **text, GBool *selection,
       c = text[i]->getChar(j) & 0xff;
       if (c == '(' || c == ')' || c == '\\') {
 	appearBuf->append('\\');
-	appearBuf->append(c);
+	appearBuf->append((char)c);
       } else if (c < 0x20 || c >= 0x80) {
 	appearBuf->appendf("\\{0:03o}", c);
       } else {
-	appearBuf->append(c);
+	appearBuf->append((char)c);
       }
     }
     appearBuf->append(") Tj\n");
@@ -2027,7 +2073,7 @@ void AcroFormField::getNextLine(GString *text, int start,
       break;
     }
     if (font && !font->isCIDFont()) {
-      dw = ((Gfx8BitFont *)font)->getWidth(c) * fontSize;
+      dw = ((Gfx8BitFont *)font)->getWidth((Guchar)c) * fontSize;
     } else {
       // otherwise, make a crude estimate
       dw = 0.5 * fontSize;

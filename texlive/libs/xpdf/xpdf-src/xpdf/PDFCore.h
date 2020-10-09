@@ -135,19 +135,21 @@ public:
   virtual GBool goBackward();
   virtual void scrollLeft(int nCols = 16);
   virtual void scrollRight(int nCols = 16);
-  virtual void scrollUp(int nLines = 16);
+  virtual void scrollUp(int nLines = 16, GBool snapToPage = gFalse);
   virtual void scrollUpPrevPage(int nLines = 16);
-  virtual void scrollDown(int nLines = 16);
+  virtual void scrollDown(int nLines = 16, GBool snapToPage = gFalse);
   virtual void scrollDownNextPage(int nLines = 16);
   virtual void scrollPageUp();
   virtual void scrollPageDown();
-  virtual void scrollTo(int x, int y);
+  virtual void scrollTo(int x, int y, GBool snapToPage = gFalse);
   virtual void scrollToLeftEdge();
   virtual void scrollToRightEdge();
   virtual void scrollToTopEdge();
   virtual void scrollToBottomEdge();
   virtual void scrollToTopLeft();
   virtual void scrollToBottomRight();
+  // Scroll so that (page, x, y) is centered in the window.
+  virtual void scrollToCentered(int page, double x, double y);
   virtual void setZoom(double zoom);
   virtual void zoomToRect(int page, double ulx, double uly,
 			  double lrx, double lry);
@@ -164,6 +166,7 @@ public:
   void setSelectMode(SelectMode mode);
 
   // Selection color.
+  SplashColorPtr getSelectionColor();
   void setSelectionColor(SplashColor color);
 
   // Modify the selection.  These functions use device coordinates.
@@ -242,6 +245,7 @@ public:
   FormField *findFormField(int pg, double x, double y);
   int findFormFieldIdx(int pg, double x, double y);
   FormField *getFormField(int idx);
+  GBool overText(int pg, double x, double y);
   void forceRedraw();
   void setTileDoneCbk(void (*cbk)(void *data), void *data);
 

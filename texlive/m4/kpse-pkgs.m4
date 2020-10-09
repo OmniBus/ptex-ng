@@ -1,15 +1,15 @@
-# $Id: kpse-pkgs.m4 48839 2018-10-06 11:20:00Z hironobu $
+# $Id: kpse-pkgs.m4 55138 2020-05-14 17:47:47Z karl $
 # Private Autoconf macros for the TeX Live (TL) tree.
-# Copyright 2016-2018 Karl Berry <tex-live@tug.org>
+# Copyright 2016-2020 Karl Berry <tex-live@tug.org>
 # Copyright 2009-2015 Peter Breitenlohner <tex-live@tug.org>
 #
 # This file is free software; the copyright holder
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
 
-## ------------------------------ ##
-## Define lists of sub-packages.  ##
-## ------------------------------ ##
+# ------------------------------ #
+# Define lists of sub-packages.  #
+# ------------------------------ #
 
 # Hopefully these lists are defined here and nowhere else.
 # Note: directories in these lists need not exist.
@@ -25,13 +25,13 @@
 # Each library must precede required other libraries (if any).
 AC_DEFUN([KPSE_LIBS_PKGS], [dnl
 m4_define([kpse_libs_pkgs], [dnl
+pplib
 harfbuzz
 icu
 teckit
 graphite2
 zziplib
 xpdf
-poppler
 mpfr
 gmp
 cairo
@@ -41,7 +41,6 @@ freetype2
 libpng
 libpaper
 luajit
-lua52
 lua53
 zlib
 ])[]dnl
@@ -59,6 +58,7 @@ AC_REQUIRE([KPSE_LIBS_PREPARE])[]dnl
 AC_REQUIRE([KPSE_KPATHSEA_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_PTEXENC_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_ZLIB_SYSTEM_FLAGS])[]dnl
+AC_REQUIRE([KPSE_PPLIB_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_LIBPAPER_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_LIBPNG_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_FREETYPE2_SYSTEM_FLAGS])[]dnl
@@ -67,7 +67,6 @@ AC_REQUIRE([KPSE_PIXMAN_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_CAIRO_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_GMP_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_MPFR_SYSTEM_FLAGS])[]dnl
-AC_REQUIRE([KPSE_POPPLER_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_XPDF_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_ZZIPLIB_SYSTEM_FLAGS])[]dnl
 AC_REQUIRE([KPSE_GRAPHITE2_SYSTEM_FLAGS])[]dnl
@@ -136,11 +135,9 @@ xdvik
 texlive
 ])]) # KPSE_TEXK_PKGS
 
-
-
-## ------------------------------- ##
-##  Loop over one of these lists.  ##
-## ------------------------------- ##
+# ------------------------------- #
+#  Loop over one of these lists.  #
+# ------------------------------- #
 
 # KPSE_FOR_PKGS(LIST, ACTION)
 # ---------------------------

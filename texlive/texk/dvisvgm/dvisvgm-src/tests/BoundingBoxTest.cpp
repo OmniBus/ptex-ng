@@ -2,7 +2,7 @@
 ** BoundingBoxTest.cpp                                                  **
 **                                                                      **
 ** This file is part of dvisvgm -- a fast DVI to SVG converter          **
-** Copyright (C) 2005-2018 Martin Gieseking <martin.gieseking@uos.de>   **
+** Copyright (C) 2005-2020 Martin Gieseking <martin.gieseking@uos.de>   **
 **                                                                      **
 ** This program is free software; you can redistribute it and/or        **
 ** modify it under the terms of the GNU General Public License as       **
@@ -191,7 +191,7 @@ TEST(BoundingBoxTest, svgRectElement) {
 	BoundingBox bbox(4, 5, 6, 7);
 	auto rect = bbox.createSVGRect();
 	ASSERT_NE(rect, nullptr);
-	EXPECT_EQ(rect->getName(), "rect");
+	EXPECT_EQ(rect->name(), "rect");
 	EXPECT_EQ(string(rect->getAttributeValue("x")), "4");
 	EXPECT_EQ(string(rect->getAttributeValue("y")), "5");
 	EXPECT_EQ(string(rect->getAttributeValue("width")), "2");

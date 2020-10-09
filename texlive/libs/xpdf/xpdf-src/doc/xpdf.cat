@@ -3,10 +3,14 @@ xpdf(1)                     General Commands Manual                    xpdf(1)
 
 
 NAME
-       xpdf - Portable Document Format (PDF) file viewer (version 4.00)
+       xpdf - Portable Document Format (PDF) file viewer (version 4.02)
 
 SYNOPSIS
        xpdf [options] [PDF-file [:page | +dest]] ...
+
+       xpdf [options] -remote remote-name [command ...]
+
+       xpdf [options] -open [PDF-file]
 
 DESCRIPTION
        Xpdf  is a viewer for Portable Document Format (PDF) files.  (These are
@@ -59,15 +63,23 @@ OPTIONS
               Set the window title.  By default,  the  title  will  be  "xpdf:
               foo.pdf".
 
-       -rv    Set  reverse video mode.  This reverses the colors of everything
-              except images.  It may not always produce great results for  PDF
-              files  which  do  weird things with color.  This also causes the
+       -open [PDF-file]
+              This option sets up a default remote server.  If Xpdf is already
+              running (with the "-open" switch), the  PDF  file  (if  any)  is
+              opened  in  a new tab.  If Xpdf (with the "-open" switch) is not
+              already running, starts Xpdf and opens the PDF  file  (if  any).
+              This  is  useful for GUI desktop environments, e.g., the typical
+              double-click on a PDF file case.
+
+       -rv    Set reverse video mode.  This reverses the colors of  everything
+              except  images.  It may not always produce great results for PDF
+              files which do weird things with color.  This  also  causes  the
               paper color to default to black.
 
        -papercolor color
               Set the "paper color", i.e., the background of the page display.
-              The  color  can be #RRGGBB (hexadecimal) or a named color.  This
-              option will not work well with PDF files  that  do  things  like
+              The color can be #RRGGBB (hexadecimal) or a named  color.   This
+              option  will  not  work  well with PDF files that do things like
               filling in white behind the text.  [config file: paperColor]
 
        -mattecolor color
@@ -76,18 +88,18 @@ OPTIONS
               a named color.  [config file: matteColor]
 
        -fsmattecolor color
-              Set  the  matte  color  for  full-screen mode.  The color can be
-              #RRGGBB  (hexadecimal)  or  a  named   color.    [config   file:
+              Set the matte color for full-screen  mode.   The  color  can  be
+              #RRGGBB   (hexadecimal)   or   a  named  color.   [config  file:
               fullScreenMatteColor]
 
        -z zoom
               Set the initial zoom factor.  A number specifies a zoom percent-
-              age, where 100 means 72 dpi.  You may also  specify  'page',  to
-              fit  the  page  to  the window size, or 'width', to fit the page
+              age,  where  100  means 72 dpi.  You may also specify 'page', to
+              fit the page to the window size, or 'width',  to  fit  the  page
               width to the window width.  [config file: initialZoom]
 
        -aa yes | no
-              Enable or disable font anti-aliasing.  This defaults  to  "yes".
+              Enable  or  disable font anti-aliasing.  This defaults to "yes".
               [config file: antialias]
 
        -aaVector yes | no
@@ -95,18 +107,22 @@ OPTIONS
               [config file: vectorAntialias]
 
        -enc encoding-name
-              Sets the encoding to use for  text  output.   The  encoding-name
-              must  be  defined  with  the unicodeMap command (see xpdfrc(5)).
+              Sets  the  encoding  to  use for text output.  The encoding-name
+              must be defined with the  unicodeMap  command  (see  xpdfrc(5)).
               This defaults to "Latin1" (which is a built-in encoding).  [con-
               fig file: textEncoding]
 
        -pw password
-              Specify  the  password for the PDF file.  This can be either the
-              owner password (which will bypass all security restrictions)  or
+              Specify the password for the PDF file.  This can be  either  the
+              owner  password (which will bypass all security restrictions) or
               the user password.
 
        -fullscreen
               Open xpdf in full-screen mode, useful for presentations.
+
+       -remote remote-name
+              Start Xpdf in remote server mode.  See the  REMOVE  SERVER  MODE
+              section.
 
        -display display
               Set the X display (only available with X11).
@@ -123,10 +139,25 @@ OPTIONS
        -h     Print usage information.  (-help and --help are equivalent.)
 
 CONTROLS
-   Tool bar
-       'page' entry box
+   Toolbar
+       toggle sidebar button
+              Toggles (i.e., shows or hides) the sidebar.
+
+       status indicator
+              This  icon is animated while Xpdf is rendering a page.  It turns
+              red when an error or warning has been issued.   Clicking  on  it
+              opens the error dialog.
+
+       selection mode
+              This  icon is an "I-beam" in linear selection mode, and an arrow
+              in block selection mode.  Clicking on it toggles between the two
+              selection modes.
+
+       page number entry box
               Move  to  a  specific page number.  Click in the box to activate
-              it, type the page number, then hit return.
+              it, type the page number, then hit return.   This  will  instead
+              display and accept page labels, if the "view - page labels" menu
+              item is checked.
 
        left/right arrow buttons
               Go backward or forward along the history path.
@@ -145,12 +176,7 @@ CONTROLS
        fit page button
               Change the zoom factor to fit the page to the window size.
 
-       working/error indicator
-              This icon is animated while Xpdf is rendering a page.  It  turns
-              red  when  an  error or warning has been issued.  Clicking on it
-              opens the error dialog.
-
-       'find' box
+       find entry box
               Find a text string.  Click in the box to  activate  it,  type  a
               search string, then hit return.
 
@@ -165,12 +191,12 @@ CONTROLS
               whole words (on/off).
 
    Menu bar
-       The menu bar is above the tool bar.  The menu  items  should  be  self-
+       The menu bar is above the toolbar.  The  menu  items  should  be  self-
        explanatory.
 
    Tab list
-       The  tab  list  is  on the left, just below the tool bar.  It lists all
-       open tabs.
+       The tab list is on the left, just below the toolbar.  It lists all open
+       tabs.
 
    Outline/layers/attachments pane
        This pane is on the left, below the tab list.  The popup allows you  to
@@ -259,6 +285,9 @@ CONTROLS
               open tab.  Quits the application if this was the last open  win-
               dow.
 
+       control-l
+              Toggle between full-screen and window modes.
+
        control-q
               Quit.
 
@@ -316,7 +345,7 @@ CONTROLS
 Full-screen mode
        Xpdf  can  be  placed into full-screen mode via the -fullscreen command
        line option,  the  'full  screen'  menu  item,  or  a  binding  to  the
-       fullScreenMode or toggleFullScreenModecommand.
+       fullScreenMode or toggleFullScreenMode command.
 
        Entering  full-screen  mode  automatically switches to single-page view
        mode and to the fit-page zoom factor.
@@ -338,6 +367,17 @@ COMMANDS
               Set block selection mode.  In this mode, the selection is a sim-
               ple rectangle.  Any part of the page can be selected, regardless
               of the content on the page.
+
+       checkOpenFile(file)
+              Check that file is open in the current tab, and open it if not.
+
+       checkOpenFileAtDest(file,dest)
+              Check that file is open in the current tab, and open it if  not.
+              In either case go to the specified named destination.
+
+       checkOpenFileAtPage(file,page)
+              Check  that file is open in the current tab, and open it if not.
+              In either case go to the specified page.
 
        closeSidebar
               Close the sidebar.
@@ -368,6 +408,10 @@ COMMANDS
        endSelection
               End a selection.
 
+       expandSidebar(n)
+              Expand the sidebar by n pixels.  Opens the sidebar if it is cur-
+              rently closed.
+
        find   Set keyboard focus to the 'find' box.
 
        findFirst
@@ -386,29 +430,29 @@ COMMANDS
               Set keyboard focus to the page number text box.
 
        followLink
-              Follow a hyperlink (does nothing if the  mouse  is  not  over  a
+              Follow  a  hyperlink  (does  nothing  if the mouse is not over a
               link).
 
        followLinkInNewTab
               Follow a hyperlink, opening PDF files in a new tab (does nothing
-              if the mouse is not over a link).  For links to  non-PDF  files,
+              if  the  mouse is not over a link).  For links to non-PDF files,
               this command is identical to followLink.
 
        followLinkInNewTabNoSel
-              Same  as followLinkInNewTab, but does nothing if there is a non-
+              Same as followLinkInNewTab, but does nothing if there is a  non-
               empty selection.  (This is useful as a mouse button binding.)
 
        followLinkInNewWin
-              Follow a hyperlink, opening PDF files  in  a  new  window  (does
-              nothing  if the mouse is not over a link).  For links to non-PDF
+              Follow  a  hyperlink,  opening  PDF  files in a new window (does
+              nothing if the mouse is not over a link).  For links to  non-PDF
               files, this command is identical to followLink.
 
        followLinkInNewWinNoSel
-              Same as followLinkInNewWin, but does nothing if there is a  non-
+              Same  as followLinkInNewWin, but does nothing if there is a non-
               empty selection.  (This is useful as a mouse button binding.)
 
        followLinkNoSel
-              Same  as  followLink,  but  does nothing if there is a non-empty
+              Same as followLink, but does nothing if  there  is  a  non-empty
               selection.  (This is useful as a mouse button binding.)
 
        fullScreenMode
@@ -431,12 +475,21 @@ COMMANDS
 
        help   Open the help URL.
 
+       hideToolbar
+              Hide the toolbar.
+
        horizontalContinuousMode
               Switch to horizontal continuous view mode.
 
        linearSelectMode
-              Set linear selection mode.  In this mode, the selection  follows
+              Set  linear selection mode.  In this mode, the selection follows
               text.  Non-text regions cannot be selected.
+
+       loadTabState
+              Load the tab state file (which was written via the  saveTabState
+              command),  and  restore  the tabs listed in that file.  The path
+              for the tab state file is specified with the  tabStateFile  set-
+              ting (see xpdfrc(5)).
 
        newTab Open an empty new tab.
 
@@ -452,10 +505,37 @@ COMMANDS
        nextTab
               Switch to the next tab.
 
-       open   Open a PDF file in this tab, using the open dialog.
+       open   Open a PDF file in the current tab, using the open dialog.
 
        openErrorWindow
               Open the error window.
+
+       openFile(file)
+              Open the specified file in the current tab.
+
+       openFileAtDest(file,dest)
+              Open  the  specified  file  in  the current tab at the specified
+              named destination.
+
+       openFileAtDestIn(file,dest,location)
+              Open the specified file  at  the  specified  named  destination.
+              Location must be "win" for a new window or "tab" for a new tab.
+
+       openFileAtPage(file,page)
+              Open  the  specified  file  in  the current tab at the specified
+              page.
+
+       openFileAtPageIn(file,page,location)
+              Open the specified file at the specified page.  Location must be
+              "win" for a new window or "tab" for a new tab.
+
+       openFileIn(file,location)
+              Open  the specified file.  Location must be "win" for a new win-
+              dow or "tab" for a new tab.
+
+       openIn(location)
+              Open a PDF file, using the open dialog.  Location must be  "win"
+              for a new window or "tab" for a new tab.
 
        openSidebar
               Open the sidebar.
@@ -530,16 +610,27 @@ COMMANDS
 
                   bind x "run(ls -l)"
 
+              The command string may not be run through a shell.  It is recom-
+              mended to keep the command simple, so that it doesn't depend  on
+              specific  shell functionality.  For complex things, you can have
+              the command string run a shell script.
 
        saveAs Save PDF via a file requester.
 
        saveImage
               Open the 'save image' dialog.
 
+       saveTabState
+              Save a list of all tabs open in this window  to  the  tab  state
+              file.  For each tab, this writes the PDF file name and page num-
+              ber (on separate lines).  This file can be loaded later with the
+              loadTabState command.  The path for the tab state file is speci-
+              fied with the tabStateFile setting (see xpdfrc(5)).
+
        scrollDown(n)
               Scroll down by n pixels.
 
-       scrollDownPrevPage(n)
+       scrollDownNextPage(n)
               Scroll down by n pixels, moving to the next page if appropriate.
 
        scrollLeft(n)
@@ -555,37 +646,44 @@ COMMANDS
               Scroll right by n pixels.
 
        scrollToBottomEdge
-              Scroll  to the bottom edge of the current page, with no horizon-
-              tal movement.
+              Scroll to the bottom edge of the last displayed  page,  with  no
+              horizontal movement.
 
        scrollToBottomRight
-              Scroll to the bottom-right corner of the current page.
+              Scroll to the bottom-right corner of the last displayed page.
 
        scrollToLeftEdge
-              Scroll to the left edge of the current page,  with  no  vertical
+              Scroll  to  the  left edge of the current page, with no vertical
               movement.
 
        scrollToRightEdge
-              Scroll  to  the right edge of the current page, with no vertical
+              Scroll to the right edge of the current page, with  no  vertical
               movement.
 
        scrollToTopEdge
-              Scroll to the top edge of the current page, with  no  horizontal
-              movement.
+              Scroll to the top edge of the first displayed page, with no hor-
+              izontal movement.
 
        scrollToTopLeft
-              Scroll to the top-left corner of the current page.
+              Scroll to the top-left corner of the first displayed page.
 
        scrollUp(n)
               Scroll up by n pixels.
 
        scrollUpPrevPage(n)
-              Scroll  up by n pixels, moving to the previous page if appropri-
+              Scroll up by n pixels, moving to the previous page if  appropri-
               ate.
 
        setSelection(pg,ulx,uly,lrx,lry)
-              Set the selection to the specified coordinates on the  specified
+              Set  the selection to the specified coordinates on the specified
               page.
+
+       showToolbar
+              Show the toolbar.
+
+       shrinkSidebar(n)
+              Shrink the sidebar by n pixels.  Closes the sidebar if shrinking
+              it would go below the minimum allowed side.
 
        sideBySideContinuousMode
               Switch to side-by-side continuous view mode.
@@ -625,6 +723,16 @@ COMMANDS
               Toggle  the sidebar between open and closed, resizing the window
               so that the document size doesn't change.
 
+       toggleToolbar
+              Toggle the toolbar between shown and hidden.
+
+       viewPageLabels
+              Show page labels (if the PDF file has them),  rather  than  page
+              numbers.
+
+       viewPageNumbers
+              Show page numbers, rather than page labels.
+
        windowMode
               Go to window (non-full-screen) mode.
 
@@ -645,6 +753,24 @@ COMMANDS
        zoomToSelection
               Zoom to the current selection.
 
+REMOTE SERVER MODE
+       Starting  xpdf  with  the  "-remote"  switch puts it into remote server
+       mode.  All remaining command line options are commands  (see  the  COM-
+       MANDS section).  Subsequent invocations of "xpdf -remote" with the same
+       remote server name will send commands to the  already-running  instance
+       of  xpdf.  The "checkOpenFile" commands are useful here for things like
+       changing pages.  For example:
+
+                  # Start up xpdf, and open something.pdf.
+                  xpdf -remote foo 'openFile(something.pdf)'
+
+                  # Switch to page 7 in the  already-open  something.pdf.   If
+              the user
+                  #  has closed xpdf in the meantime, this will restart it and
+              reopen
+                  # the file.
+                  xpdf -remote foo 'checkOpenFileAtPage(something.pdf, 7)'
+
 EXIT CODES
        The Xpdf tools use the following exit codes:
 
@@ -659,7 +785,7 @@ EXIT CODES
        99     Other error.
 
 AUTHOR
-       The xpdf software and documentation are  copyright  1996-2017  Glyph  &
+       The xpdf software and documentation are  copyright  1996-2019  Glyph  &
        Cog, LLC.
 
 SEE ALSO
@@ -669,4 +795,4 @@ SEE ALSO
 
 
 
-                                  10 Aug 2017                          xpdf(1)
+                                  25 Sep 2019                          xpdf(1)

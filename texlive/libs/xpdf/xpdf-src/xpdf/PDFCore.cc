@@ -39,7 +39,7 @@
 
 PDFCore::PDFCore(SplashColorMode colorMode, int bitmapRowPad,
 		 GBool reverseVideo, SplashColorPtr paperColor) {
-  GString *initialZoom;
+  GString *initialZoom, *initialDisplayMode;
   int z, i;
 
   doc = NULL;
@@ -81,6 +81,19 @@ PDFCore::PDFCore(SplashColorMode colorMode, int bitmapRowPad,
     state->setZoom(z);
   }
   delete initialZoom;
+  initialDisplayMode = globalParams->getInitialDisplayMode();
+  if (!initialDisplayMode->cmp("single")) {
+    state->setDisplayMode(displaySingle);
+  } else if (!initialDisplayMode->cmp("sideBySideSingle")) {
+    state->setDisplayMode(displaySideBySideSingle);
+  } else if (!initialDisplayMode->cmp("sideBySideContinuous")) {
+    state->setDisplayMode(displaySideBySideContinuous);
+  } else if (!initialDisplayMode->cmp("horizontalContinuous")) {
+    state->setDisplayMode(displayHorizontalContinuous);
+  } else {
+    state->setDisplayMode(displayContinuous);
+  }
+  delete initialDisplayMode;
 
   selectMode = selectModeBlock;
   selectPage = 0;
@@ -615,8 +628,8 @@ void PDFCore::scrollRight(int nCols) {
   scrollTo(state->getScrollX() + nCols, state->getScrollY());
 }
 
-void PDFCore::scrollUp(int nLines) {
-  scrollTo(state->getScrollX(), state->getScrollY() - nLines);
+void PDFCore::scrollUp(int nLines, GBool snapToPage) {
+  scrollTo(state->getScrollX(), state->getScrollY() - nLines, snapToPage);
 }
 
 void PDFCore::scrollUpPrevPage(int nLines) {
@@ -624,12 +637,12 @@ void PDFCore::scrollUpPrevPage(int nLines) {
       state->getScrollY() == 0) {
     gotoPrevPage(1, gFalse, gTrue);
   } else {
-    scrollUp(nLines);
+    scrollUp(nLines, gTrue);
   }
 }
 
-void PDFCore::scrollDown(int nLines) {
-  scrollTo(state->getScrollX(), state->getScrollY() + nLines);
+void PDFCore::scrollDown(int nLines, GBool snapToPage) {
+  scrollTo(state->getScrollX(), state->getScrollY() + nLines, snapToPage);
 }
 
 void PDFCore::scrollDownNextPage(int nLines) {
@@ -643,7 +656,7 @@ void PDFCore::scrollDownNextPage(int nLines) {
       scrollDown(nLines);
     }
   } else {
-    scrollDown(nLines);
+    scrollDown(nLines, gTrue);
   }
 }
 
@@ -655,9 +668,35 @@ void PDFCore::scrollPageDown() {
   scrollDownNextPage(state->getWinH());
 }
 
-void PDFCore::scrollTo(int x, int y) {
+void PDFCore::scrollTo(int x, int y, GBool snapToPage) {
+  int next, topPage, topPageY, sy, dy;
+
   startUpdate();
   state->setScrollPosition(state->getScrollPage(), x, y);
+
+  if (snapToPage) {
+    if (state->getDisplayMode() == displayContinuous ||
+	state->getDisplayMode() == displaySideBySideContinuous) {
+      next = state->getDisplayMode() == displaySideBySideContinuous ? 2 : 1;
+      topPage = tileMap->getFirstPage();
+      topPageY = tileMap->getPageTopY(topPage);
+      sy = state->getScrollY();
+      dy = sy - topPageY;
+      // note: dy can be negative here if the inter-page gap is at the
+      // top of the window
+      if (-16 < dy && dy < 16) {
+	state->setScrollPosition(state->getScrollPage(), x, topPageY);
+      } else if (topPage + next <= doc->getNumPages()) {
+	topPage += next;
+	topPageY = tileMap->getPageTopY(topPage);
+	dy = sy - topPageY;
+	if (-16 < dy && dy < 0) {
+	  state->setScrollPosition(state->getScrollPage(), x, topPageY);
+	}
+      }
+    }
+  }
+
   finishUpdate(gTrue, gTrue);
 }
 
@@ -673,25 +712,41 @@ void PDFCore::scrollToRightEdge() {
 }
 
 void PDFCore::scrollToTopEdge() {
-  scrollTo(state->getScrollX(), tileMap->getPageTopY(tileMap->getFirstPage()));
+  scrollTo(state->getScrollX(),
+	   tileMap->getPageTopY(tileMap->getFirstPage()));
 }
 
 void PDFCore::scrollToBottomEdge() {
-  int horizMax, vertMax;
-
-  tileMap->getScrollLimits(&horizMax, &vertMax);
-  scrollTo(state->getScrollX(), vertMax - state->getWinH());
+  scrollTo(state->getScrollX(),
+	   tileMap->getPageBottomY(tileMap->getLastPage()));
 }
 
 void PDFCore::scrollToTopLeft() {
-  scrollTo(0, tileMap->getPageTopY(tileMap->getFirstPage()));
+  scrollTo(tileMap->getPageLeftX(tileMap->getFirstPage()),
+	   tileMap->getPageTopY(tileMap->getFirstPage()));
 }
 
 void PDFCore::scrollToBottomRight() {
-  int horizMax, vertMax;
+  scrollTo(tileMap->getPageRightX(tileMap->getLastPage()),
+	   tileMap->getPageBottomY(tileMap->getLastPage()));
+}
 
-  tileMap->getScrollLimits(&horizMax, &vertMax);
-  scrollTo(horizMax - state->getWinW(), vertMax - state->getWinH());
+void PDFCore::scrollToCentered(int page, double x, double y) {
+  int wx, wy, sx, sy;
+
+  startUpdate();
+
+  // scroll to the requested page
+  state->setScrollPosition(page, tileMap->getPageLeftX(page),
+			   tileMap->getPageTopY(page));
+
+  // scroll the requested point to the center of the window
+  cvtUserToWindow(page, x, y, &wx, &wy);
+  sx = state->getScrollX() + wx - state->getWinW() / 2;
+  sy = state->getScrollY() + wy - state->getWinH() / 2;
+  state->setScrollPosition(page, sx, sy);
+
+  finishUpdate(gTrue, gFalse);
 }
 
 void PDFCore::setZoom(double zoom) {
@@ -897,6 +952,10 @@ void PDFCore::setSelectMode(SelectMode mode) {
     selectMode = mode;
     clearSelection();
   }
+}
+
+SplashColorPtr PDFCore::getSelectionColor() {
+  return state->getSelectColor();
 }
 
 void PDFCore::setSelectionColor(SplashColor color) {
@@ -1646,6 +1705,11 @@ FormField *PDFCore::getFormField(int idx) {
     return NULL;
   }
   return doc->getCatalog()->getForm()->getField(idx);
+}
+
+GBool PDFCore::overText(int pg, double x, double y) {
+  loadText(pg);
+  return text->checkPointInside(x, y);
 }
 
 void PDFCore::forceRedraw() {

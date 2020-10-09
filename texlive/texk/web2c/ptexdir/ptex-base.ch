@@ -59,6 +59,8 @@
 % (2017-09-07) HK  pTeX p3.7.2 More restrictions on direction change commands.
 % (2018-01-21) HK  Added \ptexversion primitive and co. pTeX p3.8.
 % (2018-04-14) HK  pTeX p3.8.1 Bug fix for discontinuous KINSOKU table.
+% (2019-02-03) HK  pTeX p3.8.2 Change \inhibitglue, add \disinhibitglue.
+% (2019-10-14) HY  pTeX p3.8.3 Allow getting \kansujichar.
 %
 
 @x
@@ -74,8 +76,8 @@
 @y
 @d pTeX_version=3
 @d pTeX_minor_version=8
-@d pTeX_revision==".1"
-@d pTeX_version_string=='-p3.8.1' {current \pTeX\ version}
+@d pTeX_revision==".3"
+@d pTeX_version_string=='-p3.8.3' {current \pTeX\ version}
 @#
 @d pTeX_banner=='This is pTeX, Version 3.14159265',pTeX_version_string
 @d pTeX_banner_k==pTeX_banner
@@ -322,6 +324,13 @@ else
   wterm(' (');
   wterm(conststringcast(get_enc_string));
   wterm(')');
+@z
+
+@x
+@d max_halfword==@"FFFFFFF {largest allowable value in a |halfword|}
+@y
+@d max_halfword==@"FFFFFFF {largest allowable value in a |halfword|}
+@d max_cjk_val=@"10000
 @z
 
 @x [8.111] l.2436 - pTeX: check hi/ho
@@ -985,7 +994,7 @@ kern_node,math_node,penalty_node: begin r:=get_node(small_node_size);
 @d hyph_data=set_box+1 {hyphenation data ( \.{\\hyphenation}, \.{\\patterns} )}
 @d set_interaction=hyph_data+1 {define level of interaction ( \.{\\batchmode}, etc.~)}
 @d set_auto_spacing=set_interaction+1 {set auto spacing mode
-  ( \.{\\autospacing}, \.{\\noautospacing}, ( \.{\\autoxspacing}, \.{\\noautoxspacing} )}
+  ( \.{\\autospacing}, \.{\\noautospacing}, \.{\\autoxspacing}, \.{\\noautoxspacing} )}
 @d max_command=set_auto_spacing {the largest command code seen at |big_switch|}
 @z
 
@@ -1000,6 +1009,7 @@ kern_node,math_node,penalty_node: begin r:=get_node(small_node_size);
   @!pdisp_field: scaled;
   @!head_field,@!tail_field,@!pnode_field,@!last_jchr_field: pointer;
   @!disp_called_field: boolean;
+  @!inhibit_glue_flag_field: integer;
 @z
 
 @x [16.213] l.4445 - pTeX: last_jchr, direction, adjust_dir, prev_{node,disp}
@@ -1014,6 +1024,7 @@ kern_node,math_node,penalty_node: begin r:=get_node(small_node_size);
 @d prev_disp==cur_list.pdisp_field {displacemant at |prev_node|}
 @d last_jchr==cur_list.last_jchr_field {final jchar node on current list}
 @d disp_called==cur_list.disp_called_field {is a |disp_node| present in the current list?}
+@d inhibit_glue_flag==cur_list.inhibit_glue_flag_field {is \.{inhibitglue} is specified at the current list?}
 @z
 
 @x [16.214] l.4464 - pTeX: prev_append: disp_node
@@ -1741,6 +1752,7 @@ else  begin k:=loc; cur_chr:=buffer[k]; incr(k);
 start_cs:
   if (cat=letter)or(cat=kanji)or(cat=kana) then state:=skip_blanks
   else if cat=spacer then state:=skip_blanks
+  else if cat=other_kchar then state:=mid_kanji
   else state:=mid_line;
   if cat=other_kchar then
     begin cur_cs:=id_lookup(loc,k-loc); loc:=k; goto found;
@@ -2049,6 +2061,7 @@ begin m:=cur_chr;
 case cur_cmd of
 assign_kinsoku: @<Fetch breaking penalty from some table@>;
 assign_inhibit_xsp_code: @<Fetch inhibit type from some table@>;
+set_kansuji_char: @<Fetch kansuji char code from some table@>;
 def_code: @<Fetch a character code from some table@>;
 toks_register,assign_toks,def_family,set_font,def_font,def_jfont,def_tfont:
   @<Fetch a token list or font identifier, provided that |level=tok_val|@>;
@@ -2264,8 +2277,16 @@ if cur_tok<cs_token_flag then
   end
 else if cur_tok<cs_token_flag+single_base then
   cur_val:=cur_tok-cs_token_flag-active_base
-else cur_val:=cur_tok-cs_token_flag-single_base;
-if (cur_val>255)and((cur_cmd<kanji)or(cur_cmd>max_char_code)) then
+else
+  { the token is a CS;
+    * if |kanji|<=|cur_cmd|<=|max_char_code|, then CS is let-equal to |wchar_token|
+    * if |max_char_code|<|cur_cmd|, then CS is a multibyte CS
+      => both case should raise "Improper ..." error
+    * otherwise it should be a single-character CS with |cur_val|<=255 }
+  begin if not (cur_cmd<kanji) then cur_cmd:=invalid_char;
+  cur_val:=cur_tok-cs_token_flag-single_base;
+  end;
+if (cur_val>255)and(cur_cmd<kanji) then
   begin print_err("Improper alphabetic or KANJI constant");
 @.Improper alphabetic constant@>
   help2("A one-character control sequence belongs after a ` mark.")@/
@@ -2448,6 +2469,9 @@ string_code:if cur_cs<>0 then sprint_cs(cur_cs)
 @d if_ybox_code=if_tbox_code+1 { `\.{\\ifybox}' }
 @d if_dbox_code=if_ybox_code+1 { `\.{\\ifdbox}' }
 @d if_mbox_code=if_dbox_code+1 { `\.{\\ifmbox}' }
+@#
+@d if_jfont_code=if_mbox_code+1  { `\.{\\ifjfont}' }
+@d if_tfont_code=if_jfont_code+1 { `\.{\\iftfont}' }
 @z
 
 @x [28.487] l.9887 - pTeX: iftdir, ifydir, ifddir, iftbox, ifybox, ifdbox
@@ -2472,6 +2496,10 @@ primitive("ifdbox",if_test,if_dbox_code);
 @!@:if_dbox_}{\.{\\ifdbox} primitive@>
 primitive("ifmbox",if_test,if_mbox_code);
 @!@:if_mbox_}{\.{\\ifmbox} primitive@>
+primitive("ifjfont",if_test,if_jfont_code);
+@!@:if_jfont_}{\.{\\ifjfont} primitive@>
+primitive("iftfont",if_test,if_tfont_code);
+@!@:if_tfont_}{\.{\\iftfont} primitive@>
 @z
 
 @x [28.488] l.9907 - pTeX: iftdir, ifydir, ifddir, iftbox, ifybox, ifdbox
@@ -2486,6 +2514,8 @@ primitive("ifmbox",if_test,if_mbox_code);
   if_ybox_code:print_esc("ifybox");
   if_dbox_code:print_esc("ifdbox");
   if_mbox_code:print_esc("ifmbox");
+  if_jfont_code:print_esc("ifjfont");
+  if_tfont_code:print_esc("iftfont");
 @z
 
 @x [28.501] l.10073 - pTeX: iftdir, ifydir, ifddir, iftbox, ifybox, ifdbox
@@ -2497,6 +2527,11 @@ if_ddir_code: b:=(abs(direction)=dir_dtou);
 if_mdir_code: b:=(direction<0);
 if_void_code, if_hbox_code, if_vbox_code, if_tbox_code, if_ybox_code, if_dbox_code, if_mbox_code:
   @<Test box register status@>;
+if_jfont_code, if_tfont_code:
+  begin scan_font_ident;
+  if this_if=if_jfont_code then b:=(font_dir[cur_val]=dir_yoko)
+  else if this_if=if_tfont_code then b:=(font_dir[cur_val]=dir_tate);
+  end;
 @z
 
 @x [28.505] l.10118 - pTeX: Test box register status : iftbox, ifybox, ifdbox
@@ -2530,19 +2565,19 @@ if (cur_cmd>active_char)or(cur_chr>255) then
   end;
 @y
 if (cur_cmd=kanji)or(cur_cmd=kana)or(cur_cmd=other_kchar) then
-  begin m:=cur_cmd; n:=cur_chr;
+  begin n:=cur_chr; m:=kcat_code(kcatcodekey(n));
   end
 else if (cur_cmd>active_char)or(cur_chr>255) then
-  begin m:=relax; n:=256;
+  begin m:=relax; n:=max_cjk_val;
   end
 else  begin m:=cur_cmd; n:=cur_chr;
   end;
 get_x_token_or_active_char;
 if (cur_cmd=kanji)or(cur_cmd=kana)or(cur_cmd=other_kchar) then
-  begin cur_cmd:=cur_cmd;
-  end {dummy}
+  begin cur_cmd:=kcat_code(kcatcodekey(cur_chr));
+  end
 else if (cur_cmd>active_char)or(cur_chr>255) then
-  begin cur_cmd:=relax; cur_chr:=256;
+  begin cur_cmd:=relax; cur_chr:=max_cjk_val;
   end;
 @z
 
@@ -2588,6 +2623,7 @@ loop@+begin if (cur_cmd>other_char)or(cur_chr>255) then {not a character}
   if not more_name(cur_chr) then goto done;
   get_x_token;
   end;
+  end;
 done: end_name; name_in_progress:=false;
 @y
 skip_mode:=false;
@@ -2605,6 +2641,7 @@ loop@+begin
    spurious spaces to file names in some cases.}
    else if ((cur_chr=" ") and (state<>token_list) and (loc>limit)) or not more_name(cur_chr) then goto done;
   get_x_token;
+  end;
   end;
 done: end_name; name_in_progress:=false;
 skip_mode:=true;
@@ -4043,6 +4080,17 @@ disp_node: begin link(p):=q; p:=q; q:=link(q); link(p):=null; goto done;
 othercases confusion("mlist3")
 @z
 
+@x [37.???] init_span: pTeX: init inhibit_glue_flag
+if mode=-hmode then space_factor:=1000
+else  begin prev_depth:=ignore_depth; normal_paragraph;
+  end;
+@y
+if mode=-hmode then space_factor:=1000
+else  begin prev_depth:=ignore_depth; normal_paragraph;
+  end;
+inhibit_glue_flag:=false;
+@z
+
 @x [37.796] l.16276 - pTeX: call adjust_hlist
   begin adjust_tail:=cur_tail; u:=hpack(link(head),natural); w:=width(u);
 @y
@@ -4053,7 +4101,7 @@ othercases confusion("mlist3")
   u:=hpack(link(head),natural); w:=width(u);
 @z
 
-@x [37.799] l.16331 - pTeX: call adjust_hlist
+@x [37.799] l.16331 - fin_row: pTeX: call adjust_hlist
   begin p:=hpack(link(head),natural);
 @y
   begin adjust_hlist(head,false);
@@ -4061,6 +4109,13 @@ othercases confusion("mlist3")
   cur_kanji_skip:=space_ptr(head); cur_xkanji_skip:=xspace_ptr(head);
   add_glue_ref(cur_kanji_skip); add_glue_ref(cur_xkanji_skip);
   p:=hpack(link(head),natural);
+@z
+
+@x [37.799] l.16331 - fin_row: init inhibit_glue_flag
+  link(tail):=p; tail:=p; space_factor:=1000;
+@y
+  link(tail):=p; tail:=p; space_factor:=1000;
+  inhibit_glue_flag:=false;
 @z
 
 @x [37.800] l.16353 - pTeX: call adjust_hlist
@@ -4846,6 +4901,13 @@ else begin link(tail):=q; tail:=q;
   end
 @z
 
+@x [47.????] pTeX: reset inhibit_glue_flag at rule_node
+vmode+hrule,hmode+vrule,mmode+vrule: begin tail_append(scan_rule_spec);
+@y
+vmode+hrule,hmode+vrule,mmode+vrule: begin tail_append(scan_rule_spec);
+  inhibit_glue_flag := false;
+@z
+
 @x [47.1060] pTeX: append_glue, inhibit_glue_flag
 end; {now |cur_val| points to the glue specification}
 tail_append(new_glue(cur_val));
@@ -4970,9 +5032,12 @@ q:pointer;
 @z
 
 @x [47.1076] pTeX: sub_exp_box
+  else  begin if abs(mode)=hmode then space_factor:=1000
     else  begin p:=new_noad;
       math_type(nucleus(p)):=sub_box;
 @y
+  else  begin if abs(mode)=hmode then 
+    begin space_factor:=1000; inhibit_glue_flag:=false; end
     else  begin p:=new_noad;
       math_type(nucleus(p)):=sub_exp_box;
 @z
@@ -5003,7 +5068,7 @@ q:pointer;
   end
 @z
 
-@x [47.1079] l.20920  - pTeX: disp_node, adjust direction
+@x [47.1079] l.20920 begin_box - pTeX: disp_node, adjust direction
 @!m:quarterword; {the length of a replacement list}
 @y
 @!r:pointer; {running behind |p|}
@@ -5125,6 +5190,12 @@ else  begin if k=vmode then scan_spec(vbox_group,true)
 push_nest; mode:=-k; adjust_dir:=a_dir;
 @z
 
+@x [47.1083] reset inhibit_glue_flag
+else  begin space_factor:=1000;
+@y
+else  begin space_factor:=1000; inhibit_glue_flag:=false;
+@z
+
 @x [47.1085] l.21031 - pTeX: end of box, call adjust_hlist
 hbox_group: package(0);
 adjusted_hbox_group: begin adjust_tail:=adjust_head; package(0);
@@ -5193,6 +5264,13 @@ push_nest; adjust_dir:=direction;
 mode:=hmode; space_factor:=1000; set_cur_lang; clang:=cur_lang;
 @z
 
+@x [47.???] indent_in_hmode: reset inhibit_glue_flag
+  if abs(mode)=hmode then space_factor:=1000
+@y
+  if abs(mode)=hmode then 
+    begin space_factor:=1000; inhibit_glue_flag:=false; end
+@z
+
 @x [47.1096] l.21155 - pTeX: end_graf, call adjust_hlist
   begin if head=tail then pop_nest {null paragraphs are ignored}
   else line_break(widow_penalty);
@@ -5202,10 +5280,11 @@ mode:=hmode; space_factor:=1000; set_cur_lang; clang:=cur_lang;
        end;
 @z
 
-@x [47.1099] l.21184 - pTeX: insert and adjust
+@x [47.1099] l.21184 begin_insert_or_adjust - pTeX: insert and adjust
 new_save_level(insert_group); scan_left_brace; normal_paragraph;
 push_nest; mode:=-vmode; prev_depth:=ignore_depth;
 @y
+inhibit_glue_flag:=false;
 new_save_level(insert_group); scan_left_brace; normal_paragraph;
 push_nest; mode:=-vmode; direction:=adjust_dir; prev_depth:=ignore_depth;
 @z
@@ -5265,9 +5344,10 @@ insert_group: begin end_graf; q:=split_top_skip; add_glue_ref(q);
   end;
 @z
 
-@x [47.1101] l.21214 - pTeX: mark_node, prev_append
+@x [47.1101] l.21214 make_mark - pTeX: mark_node, prev_append
 mark_ptr(p):=def_ref; link(tail):=p; tail:=p;
 @y
+inhibit_glue_flag:=false;
 mark_ptr(p):=def_ref;
 if not is_char_node(tail)and(type(tail)=disp_node) then
   prev_append(p)
@@ -5282,6 +5362,7 @@ end;
 @y
 procedure append_penalty;
 begin scan_int;
+  inhibit_glue_flag:=false;
   if not is_char_node(tail)and(type(tail)=disp_node) then
     prev_append(new_penalty(cur_val))
   else tail_append(new_penalty(cur_val));
@@ -5326,7 +5407,7 @@ var p:pointer; {the box}
 @!disp:scaled; {displacement}
 @z
 
-@x [47.1110] l.21314 - pTeX: free box node, delete kanji_skip
+@x [47.1110] l.21314 unpackage - pTeX: free box node, delete kanji_skip
 if (abs(mode)=mmode)or((abs(mode)=vmode)and(type(p)<>vlist_node))or@|
    ((abs(mode)=hmode)and(type(p)<>hlist_node)) then
   begin print_err("Incompatible list can't be unboxed");
@@ -5375,28 +5456,38 @@ else
   free_node(p,box_node_size);
   end;
 @z
+
 @x [47.1110] l.22014 - pTeX: free box node, delete kanji_skip
 while link(tail)<>null do tail:=link(tail);
 @y
 while link(tail)<>null do
+  {reset |inhibit_glue_flag| when a node other than |disp_node| is found;
+   |disp_node| is always inserted according to tex-jp-build issue 40}
   begin p:=tail; tail:=link(tail);
-  if not is_char_node(tail) then
+  if is_char_node(tail) then
+    inhibit_glue_flag:=false
+  else
     case type(tail) of
-    glue_node :
+    glue_node : begin
+      inhibit_glue_flag:=false;
       if (subtype(tail)=kanji_skip_code+1)
              or(subtype(tail)=xkanji_skip_code+1) then
         begin link(p):=link(tail);
         delete_glue_ref(glue_ptr(tail));
         free_node(tail,small_node_size); tail:=p;
         end;
-    penalty_node :
+      end;
+    penalty_node : begin
+      inhibit_glue_flag:=false;
       if subtype(tail)=widow_pena then
         begin link(p):=link(tail); free_node(tail,small_node_size);
         tail:=p;
         end;
+      end;
     disp_node :
       begin prev_disp:=disp; disp:=disp_dimen(tail); prev_node:=p;
       end;
+    othercases inhibit_glue_flag:=false;
     endcases;
   end;
 @z
@@ -5440,6 +5531,16 @@ begin if tail<>head then
   end;
 @z
 
+@x [47.????] pTeX: reset inhibit_glue_flag at disc_node
+procedure append_discretionary;
+var c:integer; {hyphen character}
+begin tail_append(new_disc);
+@y
+procedure append_discretionary;
+var c:integer; {hyphen character}
+begin tail_append(new_disc); inhibit_glue_flag:=false;
+@z
+
 @x pTeX: direction check in \discretionary 
 @!n:integer; {length of discretionary list}
 @y
@@ -5467,6 +5568,12 @@ case saved(-1) of
     help2("\discretionary's argument and outer hlist must have same direction.")@/
     ("I delete your second part."); error; post_break(tail):=null; flush_node_list(p);
   end;
+@z
+
+@x pTeX: reset inhibit_glue_flag
+push_nest; mode:=-hmode; space_factor:=1000;
+@y
+push_nest; mode:=-hmode; space_factor:=1000; inhibit_glue_flag:=false;
 @z
 
 @x pTeX: direction check in \discretionary 
@@ -5537,7 +5644,7 @@ else begin f:=cur_font; p:=new_character(f,cur_val);
   link(tail):=p;
   if link(p)<>null then tail:=link(p) else tail:=p;
   @<Append |disp_node| at end of displace area@>;
-  space_factor:=1000;
+  space_factor:=1000; inhibit_glue_flag:=false;
 @z
 
 @x [47.1124] l.22180 - pTeX: make_accent Kanji, insert disp_node
@@ -5753,7 +5860,6 @@ mmode+char_num: begin scan_char_num; cur_chr:=cur_val;
     help1("IGNORE.");@/
     error;
   end;
-  inhibit_glue_flag:=false;
 @z
 
 @x [48.1158] l.22690 - pTeX: scan_math
@@ -5775,14 +5881,6 @@ scan_math(nucleus(tail));
 scan_math(nucleus(tail),kcode_noad(tail));
 @z
 
-@x [48.1167] pTeX: vcenter, inhibit_glue_flag
-mmode+vcenter: begin scan_spec(vcenter_group,false); normal_paragraph;
-@y
-mmode+vcenter: begin 
-  scan_spec(vcenter_group,false); normal_paragraph;
-  inhibit_glue_flag:=false;
-@z
-
 @x [48.1164] l.22790 - pTeX: vcenter : dir
 vcenter_group: begin end_graf; unsave; save_ptr:=save_ptr-2;
   p:=vpack(link(head),saved(1),saved(0)); pop_nest;
@@ -5799,29 +5897,10 @@ vcenter_group: begin end_graf; unsave; save_ptr:=save_ptr-2;
   end;
 @z
 
-@x [48.1176] pTeX: sub_sup, inhibit_glue_flag
-procedure sub_sup;
-var t:small_number; {type of previous sub/superscript}
-@!p:pointer; {field to be filled by |scan_math|}
-begin t:=empty; p:=null;
-@y
-procedure sub_sup;
-var t:small_number; {type of previous sub/superscript}
-@!p:pointer; {field to be filled by |scan_math|}
-begin t:=empty; p:=null;
-inhibit_glue_flag:=false;
-@z
-
 @x [48.1176] l.22864 - pTeX: scan_math
 scan_math(p);
 @y
 scan_math(p,null);
-@z
-
-@x [48.1181] pTeX: math_fraction, inhibit_glue_flag
-begin c:=cur_chr;
-@y
-begin c:=cur_chr; inhibit_glue_flag:=false;
 @z
 
 @x [48.1186] l.23006 - pTeX: copy kanji code
@@ -5830,12 +5909,6 @@ begin c:=cur_chr; inhibit_glue_flag:=false;
 @y
      if ((math_type(supscr(p))=empty)and(math_kcode(p)=null)) then
       begin mem[saved(0)].hh:=mem[nucleus(p)].hh;
-@z
-
-@x [48.1191] pTeX: math_left_right, inhibit_glue_flag
-begin t:=cur_chr;
-@y
-begin t:=cur_chr; inhibit_glue_flag:=false;
 @z
 
 @x [48.1194] l.23078 - pTeX: set cur_kanji_skip, cur_xkanji_skip
@@ -5875,14 +5948,14 @@ link(tail):=link(temp_head);
 while link(tail)<>null do tail:=link(tail);
 tail_append(new_math(math_surround,after));
 @<Append |disp_node| at end of displace area@>;
-space_factor:=1000; unsave;
+space_factor:=1000; inhibit_glue_flag:=false; unsave;
 end
 @z
 
 @x [48.1200] l.23203 - pTeX: adjust direction
 push_nest; mode:=hmode; space_factor:=1000; set_cur_lang; clang:=cur_lang;
 @y
-push_nest; adjust_dir:=direction;
+push_nest; adjust_dir:=direction; inhibit_glue_flag:=false;
 mode:=hmode; space_factor:=1000; set_cur_lang; clang:=cur_lang;
 @z
 
@@ -6144,6 +6217,20 @@ show_code: @<Show the current meaning of a token, then |goto common_ending|@>;
 show_mode: @<Show the current japanese processing mode@>;
 @z
 
+@x
+libc_free(format_engine);@/
+@y
+libc_free(format_engine);@/
+dump_kanji(fmt_file);
+@z
+
+@x
+libc_free(format_engine);
+@y
+libc_free(format_engine);
+undump_kanji(fmt_file);
+@z
+
 @x l.24982
 font_info:=xmalloc_array(fmemory_word, font_mem_size);
 @y
@@ -6236,6 +6323,61 @@ undump_things(char_base[null_font], font_ptr+1-null_font);
   ctype_base[null_font]:=0; char_base[null_font]:=0; width_base[null_font]:=0;
 @z
 
+@x [53.????] new_write_whatsit, inhibit_glue_flag
+write_stream(tail):=cur_val;
+end;
+@y
+write_stream(tail):=cur_val;
+inhibit_glue_flag:=false;
+end;
+@z
+
+@x [53.????] Implement \special, inhibit_glue_flag
+@<Implement \.{\\special}@>=
+begin new_whatsit(special_node,write_node_size); write_stream(tail):=null;
+p:=scan_toks(false,true); write_tokens(tail):=def_ref;
+end
+@y
+@<Implement \.{\\special}@>=
+begin new_whatsit(special_node,write_node_size); write_stream(tail):=null;
+p:=scan_toks(false,true); write_tokens(tail):=def_ref;
+inhibit_glue_flag:=false;
+end
+@z
+
+@x [53.????] Implement \immediate, inhibit_glue_flag
+  begin p:=tail; do_extension; {append a whatsit node}
+  out_what(tail); {do the action immediately}
+  flush_node_list(tail); tail:=p; link(p):=null;
+  end
+@y
+  begin k:=inhibit_glue_flag;
+  p:=tail; do_extension; {append a whatsit node}
+  out_what(tail); {do the action immediately}
+  flush_node_list(tail); tail:=p; link(p):=null;
+  inhibit_glue_flag:=k;
+  end
+@z
+
+@x [53.????] fix_language, inhibit_glue_flag
+if l<>clang then
+  begin new_whatsit(language_node,small_node_size);
+@y
+if l<>clang then
+  begin inhibit_glue_flag:=false;
+  new_whatsit(language_node,small_node_size);
+@z
+
+@x [53.????] set_language, inhibit_glue_flag
+if abs(mode)<>hmode then report_illegal_case
+else begin new_whatsit(language_node,small_node_size);
+@y
+if abs(mode)<>hmode then report_illegal_case
+else begin inhibit_glue_flag:=false;
+  new_whatsit(language_node,small_node_size);
+@z
+
+
 @x [53.1376] l.26309 - pTeX:
 @<Glob...@> =
 @!debug_format_file: boolean;
@@ -6327,6 +6469,17 @@ else
   define(kansuji_base+n,n,tokanji(toDVI(cur_val)));
 end;
 
+@ @<Fetch kansuji char code from some table@>=
+begin scan_int; cur_val_level:=int_val;
+  if (cur_val<0)or(cur_val>9) then
+    begin print_err("Invalid KANSUJI number ("); print_int(cur_val); print_char(")");
+    help1("I'm skipping this control sequences.");@/
+    error; return;
+    end
+  else
+    cur_val:=fromDVI(kansuji_char(cur_val));
+end
+
 @ |print_kansuji| procedure converts a number to KANJI number.
 
 @ @<Declare procedures needed in |scan_something_internal|@>=
@@ -6404,23 +6557,20 @@ inserting a space between 2byte-char and 1byte-char.
 @d new_pos=0
 @d cur_pos=1
 
-@<Global...@>=
-  inhibit_glue_flag:boolean;
-
-@ @<Set init...@>=
-  inhibit_glue_flag:=false;
-
 @ @<Cases of |main_control| that don't...@>=
-  any_mode(inhibit_glue): inhibit_glue_flag:=true;
+  any_mode(inhibit_glue): inhibit_glue_flag:=(cur_chr=0);
 
 @ @<Put each...@>=
 primitive("inhibitglue",inhibit_glue,0);
 @!@:inhibit_glue_}{\.{\\inhibitglue} primitive@>
+primitive("disinhibitglue",inhibit_glue,1);
+@!@:dis_inhibit_glue_}{\.{\\disinhibitglue} primitive@>
 primitive("inhibitxspcode",assign_inhibit_xsp_code,inhibit_xsp_code_base);
 @!@:inhibit_xsp_code_}{\.{\\inhibitxspcode} primitive@>
 
 @ @<Cases of |print_cmd_chr|...@>=
-inhibit_glue: print_esc("inhibitglue");
+inhibit_glue: if (chr_code>0) then print_esc("disinhibitglue")
+  else print_esc("inhibitglue");
 assign_inhibit_xsp_code: print_esc("inhibitxspcode");
 
 @ @<Declare procedures needed in |scan_something_internal|@>=
@@ -7106,7 +7256,6 @@ written in section 48.
 procedure set_math_kchar(@!c:integer);
 var p:pointer; {the new noad}
 begin p:=new_noad; math_type(nucleus(p)):=math_jchar;
-inhibit_glue_flag:=false;
 character(nucleus(p)):=qi(0);
 math_kcode(p):=c; fam(nucleus(p)):=cur_jfam;
 if font_dir[fam_fnt(fam(nucleus(p))+cur_size)]=dir_default then
@@ -7186,9 +7335,9 @@ again_2:
         end
       else cur_l:=qi(get_jfm_pos(KANJI(cur_chr),main_f));
       end;
-    inhibit_glue: begin inhibit_glue_flag:=true; goto again_2; end;
+    inhibit_glue: begin inhibit_glue_flag:=(cur_chr=0); goto again_2; end;
     othercases begin ins_kp:=max_halfword;
-      cur_l:=qi(0); cur_r:=non_char; lig_stack:=null;
+      cur_l:=qi(-1); cur_r:=non_char; lig_stack:=null;
       end;
   endcases;
 @#
@@ -7238,7 +7387,9 @@ end;
 @ @<Look ahead for glue or kerning@>=
 cur_q:=tail;
 if inhibit_glue_flag<>true then
-  begin if (tail=link(head))and(not is_char_node(tail))and(type(tail)=disp_node) then
+  begin { print("IF");print_int(cur_l); }
+  if cur_l<qi(0) then cur_l:=qi(0) else inhibit_glue_flag:=false;
+  if (tail=link(head))and(not is_char_node(tail))and(type(tail)=disp_node) then
     goto skip_loop
   else begin if char_tag(main_i)=gk_tag then
     begin main_k:=glue_kern_start(main_f)(main_i);
@@ -7282,8 +7433,12 @@ if inhibit_glue_flag<>true then
     end;
   end;
   end;
-end;
-skip_loop: inhibit_glue_flag:=false;
+end
+else
+  begin { print("IT");print_int(cur_l); }
+  if cur_l<qi(0) then cur_l:=qi(0) else inhibit_glue_flag:=false;
+  end;
+skip_loop: do_nothing;
 
 @ @<Basic printing...@>=
 procedure print_kanji(@!s:KANJI_code); {prints a single character}

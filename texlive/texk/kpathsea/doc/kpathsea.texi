@@ -2,13 +2,13 @@
 @setfilename kpathsea.info
 @settitle Kpathsea: A library for path searching
 
-@set version 6.3.0
-@set month-year July 2018
+@set version 6.3.2
+@set month-year March 2020
 
 @copying
 This file documents the Kpathsea library for path searching.
 
-Copyright @copyright{} 1996--2018 Karl Berry & Olaf Weber.
+Copyright @copyright{} 1996--2020 Karl Berry & Olaf Weber.
 
 Permission is granted to make and distribute verbatim copies of this
 manual provided the copyright notice and this permission notice are
@@ -67,7 +67,7 @@ approved by the @TeX{} Users Group.
 @author Karl Berry
 @author Olaf Weber
 @author Taco Hoekwater
-@author @url{http://tug.org/kpathsea}
+@author @url{https://tug.org/kpathsea}
 
 @page
 @vskip 0pt plus 1filll
@@ -132,7 +132,7 @@ this library:
 @noindent Other software that we do not maintain also uses it.
 
 Kpathsea is now maintained as part of the @TeX{} Live distribution
-(@url{http://tug.org/texlive}), which includes several more
+(@url{https://tug.org/texlive}), which includes several more
 Kpathsea-using programs.  For information on configuration, building,
 installing, and more, @pxref{,,,tlbuild, Building @TeX{} Live}.
 
@@ -153,7 +153,7 @@ along with any changes you have made, and allow anyone to modify the
 library source and distribute their modifications.  It does not mean
 you have to distribute the source to your program using the library,
 although we hope you will.  See accompanying files for the text of the
-GNU licenses, or @url{http2://www.gnu.org/licenses}.
+GNU licenses, or @url{https://gnu.org/licenses}.
 
 @cindex @TeX{} Users Group
 If you know enough about @TeX{} to be reading this manual, then you (or
@@ -357,8 +357,8 @@ This section describes the default installation hierarchy of the
 distribution.  It conforms to both the GNU coding standards and the
 @TeX{} directory structure (TDS) standard.  For rationale and further
 explanation, please see those documents.  The GNU document is
-available from @url{http://www.gnu.org/prep/standards}.  The TDS
-document is available from @url{http://www.mirror.ctan.org/tds}
+available from @url{https://gnu.org/prep/standards}.  The TDS
+document is available from @url{http://mirror.ctan.org/tds}
 (@pxref{unixtex.ftp}).
 
 In short, here is a skeleton of the default directory structure,
@@ -444,6 +444,12 @@ Some concrete examples for most file types:
 This chapter describes the generic path searching mechanism Kpathsea
 provides.  For information about searching for particular file types
 (e.g., @TeX{} fonts), see the next chapter.
+
+@cindex translations, of path searching description
+This section, with minor differences, has been translated into several
+other languages (Chinese, Spanish, Russian, Japanese, French, German,
+@dots{}) as part of the @TeX{} Live guide; see
+@url{https://tug.org/texlive/doc.html} for links.
 
 @menu
 * Searching overview::          Basic scheme for searching.
@@ -570,6 +576,11 @@ In the order in which Kpathsea looks for them:
 
 @enumerate
 @item
+@opindex @samp{--cnf-line}, source for path
+A command-line option such as @code{--cnf-line}, available in
+@file{kpsewhich} and most @TeX{} engines.  @xref{Path searching
+options}. 
+
 @cindex environment variable, source for path
 A user-set environment variable, e.g., @code{TEXINPUTS}.
 Environment variables with an underscore and the program name appended
@@ -642,12 +653,12 @@ mentions most features.  The format of @file{texmf.cnf} files follows:
 @cindex comments, in @file{texmf.cnf}
 Comments start with @samp{%}, either at the beginning of a line or
 preceded by whitespace, and continue to the end of the line.  That is,
-as with most shells, a @samp{%} in the ``middle'' of a value does not
+similar to most shells, a @samp{%} in the ``middle'' of a value does not
 start a comment.  Examples:
 
 @example
 % this is a comment
-var = a%b  % but the value of var will be "a%b".
+var = a%b  % but the value of var will be "a%b"
 @end example
 
 @item
@@ -663,7 +674,7 @@ A @samp{\} at the end of a line acts as a continuation character, i.e.,
 the next line is appended.  Whitespace at the beginning of continuation
 lines is not ignored.
 
-@item Each remaining line must look like
+@item Each remaining line will look like:
 
 @example
 @var{variable} @r{[}. @var{progname}@r{]} @r{[}=@r{]} @var{value}
@@ -676,23 +687,32 @@ lines is not ignored.
 The @var{variable} name may contain any character other than whitespace,
 @samp{=}, or @samp{.}, but sticking to @samp{A-Za-z_} is safest.
 
-@item If @samp{.@var{progname}} is present, the definition only
-applies if the program that is running is named (i.e., the last
-component of @code{argv[0]} is) @var{progname} or
-@file{@var{progname}.@{exe,bat,cmd,...@}}.  Most notably, this allows
-different flavors of @TeX{} to have different search paths.
+@kindex .@var{progname} @r{qualifier in @file{texmf.cnf}}
+@item If @samp{.@var{progname}} is present (preceding spaces are
+ignored), the definition only applies if the program that is running
+is named (i.e., the last component of @code{argv[0]} is)
+@var{progname} or @file{@var{progname}.@{exe,bat,cmd,...@}}.  Most
+notably, this allows different flavors of @TeX{} to have different
+search paths.  The @var{progname} value is used literally, without
+variable or other expansions.
 
 @item
 @cindex right-hand side of variable assignments
-@var{value} may contain any characters except @samp{%} and @samp{@@}.
-(These restrictions are only necessary because of the processing done
-on @file{texmf.cnf} at build time, so you can stick those characters
-in after installation if you have to.)  The
-@samp{$@var{var}.@var{prog}} feature is not available on the
+Considered as strings, @var{value} may contain any character.
+However, in practice most @file{texmf.cnf} values are related to path
+expansion, and since various special characters are used in expansion,
+such as braces and commas, they cannot be used in directory names.
+  
+The @samp{$@var{var}.@var{prog}} feature is not available on the
 right-hand side; instead, you must use an additional variable (see
-below for example).  A @samp{;} in @var{value} is translated to
-@samp{:} if running under Unix; this is useful to write a single
-@file{texmf.cnf} which can be used under both Unix and Windows.
+below for example).
+
+@kindex ; @r{translated to @samp{:} in @file{texmf.cnf}}
+A @samp{;} in @var{value} is translated to @samp{:} if running under
+Unix, in order to have a single @file{texmf.cnf} that can support both
+Unix and Windows systems. This translation happens with any value, not
+just search paths, but fortunately in practice @samp{;} is not needed
+in other values.
 
 @item All definitions are read before anything is expanded, so you can
 use variables before they are defined (like Make, unlike most other
@@ -714,13 +734,33 @@ TEXINPUTS.latex = $latex2e_inputs
 
 @cindex shell scripts as configuration files
 @cindex configuration files as shell scripts.
-This format has obvious similarities to Bourne shell scripts---change
-the comment character to @code{#}, disallow spaces around the
-@code{=}, and get rid of the @code{.@var{name}} convention, and it
-could be run through the shell.  However, there seemed little
-advantage in this, since all the information would have to passed back
-to Kpathsea and parsed there anyway, since the @code{sh} process
-couldn't affect its parent's environment.
+This format has some similarity to Bourne shell scripts---change the
+comment character to @code{#}, disallow spaces around the @code{=},
+and get rid of the @code{.@var{name}} convention, and it could be run
+through the shell.  However, there seemed little advantage in this,
+since all the information would have to passed back to Kpathsea and
+parsed there anyway, since the @code{sh} process couldn't affect its
+parent's environment.
+
+@kindex = @r{omitted in @file{texmf.cnf} and misparsing}
+The combination of spaces being ignored before the @code{.} of a
+program name qualifer and the optional @samp{=} for the assignment has
+an unexpected consequence: if the value begins with a literal @samp{.}
+and the @samp{=} is omitted, the intended value is interpreted as a
+program name.  For example, a line @code{var .;/some/path} is taken as
+an empty value for @code{var} running under the program named
+@samp{;/some/path}.  To diagnose this, Kpathsea warns if the program
+name contains a path separator or other special character.  The
+simplest way to avoid the problem is to use the @code{=}.
+
+Exactly when a character will be considered special or act as itself
+depends on the context in which it is used. The rules are inherent in
+the multiple levels of interpretation of the configuration (parsing,
+expansion, search, @dots{}) and so cannot be concisely stated,
+unfortunately. There is no general escape mechanism; in particular,
+@samp{\} is not an ``escape character'' in @file{texmf.cnf} files.
+When it comes choosing directory names for installation, it is safest to
+avoid them all.
 
 @flindex cnf.c
 The implementation of all this is in @file{kpathsea/cnf.c}.
@@ -919,7 +959,7 @@ foo/@{1,2@}/baz
 @end example
 
 @noindent expands to @samp{foo/1/baz:foo/2/baz}.  @samp{:} is the path
-separator on the current system; e.g., on a DOS system, it's @samp{;}.
+separator on the current system; e.g., on a Windows system, it's @samp{;}.
 
 Braces can be nested; for example, @samp{x@{A,B@{1,2@}@}y} expands to
 @samp{xAy:xB1y:xB2y}.
@@ -934,7 +974,7 @@ assigning a brace list to @code{$TEXMF}, as mentioned in
 @file{texmf.in}.
 
 You can also use the path separator instead of the comma.  The last
-example could have been written @samp{x@{A:B@}@{1:2@}y}.
+example could have been written @samp{x@{A:B@}@{1:2@}y} (on Unix).
 
 
 @flindex expand.c
@@ -1007,11 +1047,11 @@ You can disable the trick by undefining @code{ST_NLINK_TRICK} in
 Unfortunately, in some cases files in leaf directories are
 @code{stat}'d: if the path specification is, say,
 @samp{$TEXMF/fonts//pk//}, then files in a subdirectory
-@samp{@dots{}/pk}, even if it is a leaf, are checked. The reason cannot
-be explained without reference to the implementation, so read
+@samp{@dots{}/pk}, even if it is a leaf, are checked. The reason
+cannot be explained without reference to the implementation, so read
 @file{kpathsea/elt-dirs.c} (search for @samp{may descend}) if you are
-curious.  And if you can find a way to @emph{solve} the problem, please
-let me know.
+curious.  And if you find a way to solve the problem, please let me
+know.
 
 @flindex elt-dirs.c
 Subdirectory expansion is implemented in the source file
@@ -1064,8 +1104,8 @@ case.
 
 This same problematic scenario has always existed on Windows, but for
 whatever reason, it has become much more common since Apple also went
-to a case-insensitive filesystem.  Hence the move to change the
-Kpathsea behavior now.
+to a case-insensitive filesystem.  Hence the relatively late change
+to the Kpathsea behavior.
 
 @cindex Windows and casefolding
 The fallback case-insensitive search is omitted at compile-time on
@@ -1138,6 +1178,7 @@ searches the disk in the big system directory, the casefolding is not
 done, and a search for @samp{stix-regular.otf} will fail (on
 case-sensitive systems), as it always has.
 
+@kindex !! @r{and casefolding}
 The caveat about not searching the disk amounts to saying that
 casefolding does not happen in the trees specified with @samp{!!}
 (@pxref{ls-R}), that is, where only database (@file{ls-R}) searching
@@ -1167,7 +1208,7 @@ Sorry that it's annoyingly lengthy, but implementing this inside
 Kpathsea would be a lot of error-prone trouble for something that is
 only useful for debugging.  If your @code{find} does not support
 @code{-iname}, you can get GNU Find from
-@url{https://www.gnu.org/software/findutils}.
+@url{https://gnu.org/software/findutils}.
 
 The casefolding search is implemented in the source file
 @file{kpathsea/pathsearch.c}.  Two implementation points:
@@ -1199,7 +1240,7 @@ happens with the elements of the leaf directory.
 
 Kpathsea goes to some lengths to minimize disk accesses for searches
 (@pxref{Subdirectory expansion}).  Nevertheless, in practice searching
-each possible directory in typical @TeX{} installations takes an
+every possible directory in typical @TeX{} installations takes an
 excessively long time.
 
 Therefore, Kpathsea can use an externally-built @dfn{filename
@@ -1207,8 +1248,7 @@ database} file named @file{ls-R} that maps files to directories, thus
 avoiding the need to exhaustively search the disk.
 
 A second database file @file{aliases} allows you to give additional
-names to the files listed in @file{ls-R}.  This can be helpful to adapt
-to ``8.3'' filename conventions in source files.
+names to the files listed in @file{ls-R}.
 
 The @file{ls-R} and @file{aliases} features are implemented in the
 source file @file{kpathsea/db.c}.
@@ -1224,14 +1264,19 @@ source file @file{kpathsea/db.c}.
 @subsection @file{ls-R}
 
 @flindex ls-R @r{database file}
-@vindex TEXMFDBS
 
 As mentioned above, you must name the main filename database
 @file{ls-R}.  You can put one at the root of each @TeX{} installation
-hierarchy you wish to search (@code{$TEXMF} by default); most sites have
-only one hierarchy.  Kpathsea looks for @file{ls-R} files along the
-@code{TEXMFDBS} path, so that should presumably match the list of
-hierarchies.
+hierarchy you wish to search (@code{$TEXMF} by default, which expands
+to a braced list of several hierarchies in @TeX{} Live). 
+
+@vindex TEXMFDBS
+@kindex !! @r{in @code{TEXMFDBS}}
+Kpathsea looks for @file{ls-R} files along the @code{TEXMFDBS}
+path. It is best for this to contain all and only those hierarchies
+from @code{$TEXMF} which are specified with @code{!!}---and also to
+specify them with @code{!!} in @code{TEXMFDBS}. (See the end of this
+section for more on @code{!!}.)
 
 The recommended way to create and maintain @samp{ls-R} is to run the
 @code{mktexlsr} script, which is installed in @samp{$(bindir)}
@@ -1256,10 +1301,12 @@ Also presuming your @code{ls} hasn't been aliased in a system file
 generating @file{ls-R}.  For the precise definition of the file format,
 see @ref{Database format}.
 
-Regardless of whether you use the supplied script or your own, you will
-almost certainly want to invoke it via @code{cron}, so when you make
-changes in the installed files (say if you install a new La@TeX{}
-package), @file{ls-R} will be automatically updated.
+Regardless of whether you use the supplied script or your own, you
+will almost certainly want to invoke it via @code{cron}, so when you
+make changes in the installed files (say if you install a new @LaTeX{}
+package), @file{ls-R} will be automatically updated.  However, for
+those using @TeX{} Live or system distributions, the package managers
+should run @code{mktexlsr} as needed.
 
 @opindex -A @r{option to @code{ls}}
 @cindex dot files
@@ -1268,7 +1315,7 @@ package), @file{ls-R} will be automatically updated.
 @flindex .tex @r{file, included in @file{ls-R}}
 The @samp{-A} option to @code{ls} includes files beginning with @samp{.}
 (except for @file{.} and @file{..}), such as the file @file{.tex}
-included with the La@TeX{} tools package.  (On the other hand,
+included with the @LaTeX{} tools package.  (On the other hand,
 @emph{directories} whose names begin with @samp{.} are always ignored.)
 
 @cindex symbolic links, and @file{ls-R}
@@ -1293,14 +1340,27 @@ ignores everything under such directories.
 
 @kindex !! @r{in path specifications}
 @cindex disk searching, avoiding
-Because the database may be out-of-date for a particular run, if a file
-is not found in the database, by default Kpathsea goes ahead and
-searches the disk. If a particular path element begins with @samp{!!},
-however, @emph{only} the database will be searched for that element,
-never the disk.  If the database does not exist, nothing will be
-searched.  Because this can surprise users (``I see the font
-@file{foo.tfm} when I do an @code{ls}; why can't Dvips find it?''), it
-is not in any of the default search paths.
+If a particular path element begins with @samp{!!}, @emph{only} the
+database will be searched for that element, never the disk; and if the
+database does not exist, nothing at all will be searched.  In @TeX{}
+Live, most of the trees are specified with @samp{!!}.
+
+For path elements that do not begin with @samp{!!}, if the database
+exists, it will be used, and the disk will not be searched.  However,
+in this case, if the database does not exist, the disk will be
+searched.  In @TeX{} Live, the most notable case of this is the
+@code{TEXMFHOME} tree, to allow users to add and remove files from
+their own tree without having to worry about @code{ls-R}.
+
+(Aside: there are uncommon cases where a @samp{!!} tree will be
+searched on disk even if the @code{ls-R} file exists; they are too
+obscure to try to explain here.  See @file{pathsearch.c} in the source
+if you need to know.)
+
+To sum up: do not create an @code{ls-R} file unless you also take care
+to keep it up to date. Otherwise newly-installed files will not be
+found.
+
 
 
 @node Filename aliases
@@ -1451,6 +1511,28 @@ The default is enabled, set in @code{texmf.cnf}.  Disabling
 become case-sensitive when the underlying (file)system is
 case-insensitive, it merely means that Kpathsea does not do any
 casefolding itself.
+
+@item --cnf-line=@var{str}
+@opindex --cnf-line
+Parse @var{str} as if it were a line in the @file{texmf.cnf}
+configuration file (@pxref{Config files}), overriding settings in the
+actual configuration files, and also in the environment (@pxref{Path
+sources}).  This is implemented by making any settings from @var{str}
+in the environment, overwriting any value already there.  Thus, an
+extra colon in a @samp{--cnf-line} value will refer to the value from
+a configuration file, not a user-set environment variable.
+
+Furthermore, any variable set from @var{str} will also be set with the
+program name suffix.  For example, @code{pdftex
+--cnf-line=TEXINPUTS=/foo:} will set both @code{TEXINPUTS} and
+@code{TEXINPUTS_pdftex} in the environment (and the value will be
+@file{/foo} followed by the setting from @file{texmf.cnf}, ignoring
+any user-set @code{TEXINPUTS}).
+
+This behavior is desirable because, in practice, many variables in the
+distributed @file{texmf.cnf} are program-specific, and the intuitive
+behavior is for values set on the command line with @code{--cnf-line}
+to override them.
 
 @item --dpi=@var{num}
 @opindex --dpi=@var{num}
@@ -1769,8 +1851,8 @@ Set debugging options to @var{num}.  @xref{Debugging}.
 
 @item --expand-braces=@var{string}
 @opindex --expand-braces=@var{string}
-Output variable and brace expansion of @var{string}.  @xref{Path
-expansion}.
+Output variable, tilde, and brace expansion of @var{string}, which is
+assumed to be a single path element.  @xref{Path expansion}.
 
 @item --expand-path=@var{string}
 @opindex --expand-path=@var{string}
@@ -1791,14 +1873,16 @@ $ kpsewhich --expand-path '/nonesuch'
 @end example
 
 For one-shot uses of an arbitrary (not built in to Kpathsea) path, see
-@samp{--path} (@pxref{Path searching options})
+@samp{--path} (@pxref{Path searching options}).
 
 @item --expand-var=@var{string}
 @opindex --expand-var=@var{string}
-Output the variable and tilde expansion of @var{string}
-the @samp{mktex@dots{}} scripts run @samp{kpsewhich
---expand-var='$TEXMF'} to find the root of the @TeX{} system
-hierarchy.  @xref{Path expansion}.
+Output the variable and tilde expansion of @var{string}.  For example,
+with the usual @file{texmf.cnf}, @samp{kpsewhich
+--expand-var='$TEXMF'} returns the @TeX{} system hierarchy root(s).
+@xref{Path expansion}.  The specified @var{string} can contain
+anything, though, not just variable references.  This calls
+@code{kpse_var_expand} (@pxref{Programming with config files}).
 
 @item --help-formats
 @opindex --help-formats
@@ -1822,12 +1906,36 @@ Show the path that would be used for file lookups of file type
 or an integer can be used, just as with @samp{--format}, described in
 the previous section.
 
+@item --var-brace-value=@var{variable}
+@opindex --var-brace-value=@var{variable}
+Like @samp{--var-value} (next), but also expands @samp{@{...@}}
+constructs.  (@pxref{Brace expansion}).  Thus, the value is assumed to
+possibly be several path elements, and @samp{~} is expanded at the
+beginning of each.  The path separator is changed to that of the
+current system in the expansion.
+
+Example: @samp{FOO='.;~' kpsewhich --var-brace-value=FOO} outputs (on
+a Unix-ish system) @samp{.:/home/karl}, supposing the latter is the
+current user's home directory.  Note that the @samp{;} in the source
+value, as commonly used in @file{texmf.cnf}, has changed to a
+@samp{:}, as the normal path separator on the current system.  On a
+Windows-ish system, the @samp{;} would remain.
+
 @item --var-value=@var{variable}
 @opindex --var-value=@var{variable}
 Outputs the value of @var{variable} (a simple identifier like
-@samp{TEXMF}, with no @samp{$} or other constructs), expanding
-@samp{$} (@pxref{Variable expansion} and @samp{~} (@pxref{Tilde
-expansion}) constructs, but not performing other expansions.
+@samp{TEXMFDIST}, with no @samp{$} or other constructs), expanding
+@samp{$} (@pxref{Variable expansion}) and @samp{~} (@pxref{Tilde
+expansion}) constructs in the value.  @samp{~} expansion happens at the
+beginning of the overall value and at the beginning of a variable
+expansion, but not arbitrarily within the string.  Braces are not expanded.
+
+Example: @samp{--var-value=texmf_casefold_search} outputs (if the
+default is not changed) @samp{1}.
+
+Example to contrast with @samp{--var-brace-value}: @samp{FOO='.;~'
+kpsewhich --var-value=FOO} outputs @samp{.;~}, i.e., the same as the
+input value, on all systems.
 
 @end table
 
@@ -1935,7 +2043,7 @@ suffix @samp{.bib}.
 @item bltxml
 @flindex .bltxml
 @vindex BLTXMLINPUTS
-(Bib@LaTeX{}ML bibliography files for Biber, @url{http://ctan.org/pkg/biber})
+(Bib@LaTeX{}ML bibliography files for Biber, @url{https://ctan.org/pkg/biber})
 @code{BLTXMLINPUTS}
 suffix @samp{.bltxml}.
 
@@ -1951,7 +2059,7 @@ suffix @samp{.bst}.
 @flindex .dll
 @flindex .so
 @vindex CLUAINPUTS
-(dynamic libraries for Lua, @url{http://ctan.org/pkg/luatex})
+(dynamic libraries for Lua, @url{https://ctan.org/pkg/luatex})
 @code{CLUAINPUTS}
 suffixes @samp{.dll} and @samp{.so}.
 
@@ -2207,7 +2315,7 @@ additional suffix @samp{.pro}.
 @item ris
 @flindex .ris
 @vindex RISINPUTS
-(RIS bibliography files, primarily for Biber, @url{http://ctan.org/pkg/biber})
+(RIS bibliography files, primarily for Biber, @url{https://ctan.org/pkg/biber})
 @code{RISINPUTS}
 suffix @samp{.ris}.
 
@@ -3201,7 +3309,7 @@ The @file{c-*.h} header files can also help your program adapt to many
 different systems.  You will almost certainly want to use Autoconf and
 probably Automake for configuring and building your software if you use
 Kpathsea; I strongly recommend using Autoconf and Automake regardless.
-They are available from @url{http://www.gnu.org/software}.
+They are available from @url{https://gnu.org/software}.
 
 
 @node Program-specific files
@@ -3240,18 +3348,24 @@ installers by keeping all configuration in one place.
 @findex kpathsea_var_value
 @flindex variable.h
 @vindex shell_escape@r{, example for code}
-To retrieve a value @var{var} from config files, the best way is to call
-@code{kpathsea_var_value} on the string @code{@var{var}}.  This will look
-first for an environment variable @var{var}, then a config file value.
-The result will be the value found or @samp{NULL}.  This function is
-declared in @file{kpathsea/variable.h}.  For an example, see the
+To retrieve a value for a configuration variable @var{var}, the best
+way is to call @code{kpathsea_var_value} on the string
+@code{@var{var}}.  This will look first for an environment variable
+@var{var}, then a config file value.  The result will be the value
+found or @samp{NULL}.  This function is declared in
+@file{kpathsea/variable.h}.  For an example, see the
 @code{shell_escape} code in @file{web2c/lib/texmfmp.c}.
 
-The routine to do variable expansion in the context of a search path (as
-opposed to simply retrieving a value) is @code{kpathsea_var_expand}, also
-declared in @file{kpathsea/variable.h}.  It's generally only necessary
-to set the search path structure components as explained in the previous
-section, rather than using this yourself.
+The routine to do full variable and tilde expansion of an arbitrary
+string in the context of a search path (as opposed to simply
+retrieving a value) is @code{kpathsea_var_expand}, also declared in
+@file{kpathsea/variable.h}.  However, it's generally only necessary to
+set the search path structure components as explained in the previous
+section instead of using this directly.  Because of its usage with any
+input string, undefined @code{$FOO} constructs in the argument to
+@code{kpathsea_var_expand} are returned literally (@code{"$FOO"}),
+while undefined @code{$@{FOO@}} constructs are expanded to the empty
+string.
 
 @findex kpathsea_cnf_get
 @flindex cnf.h
@@ -3370,7 +3484,7 @@ me to understand.  Please also include a @file{ChangeLog} entry.
 @pindex gdb@r{, recommended}
 If the bug involved is an actual crash (i.e., core dump), it is easy
 and useful to include a stack trace from a debugger (I recommend the
-GNU debugger GDB (@url{http://www.gnu.org/software/gdb}).  If the
+GNU debugger GDB (@url{https://gnu.org/software/gdb}).  If the
 cause is apparent (a @code{NULL} value being dereferenced, for
 example), please send the details along.  If the program involved is
 @TeX{} or Metafont, and the crash is happening at apparently-sound
@@ -3394,7 +3508,7 @@ diagnosing, or fixing the bug.
 @flindex tex-k@@tug.org
 Web2c and Kpathsea in general are discussed on the mailing list
 @email{tex-k@@tug.org}.  You can subscribe and peruse the archives on
-the web @url{http://lists.tug.org/tex-k}.
+the web @url{https://lists.tug.org/tex-k}.
 
 You do not need to join to submit a report, nor will it affect whether
 you get a response.  Be aware that large data files are sometimes
@@ -3403,7 +3517,7 @@ the list.
 
 If you are looking for general @TeX{} help, such as how to install a
 full @TeX{} system or how to use @LaTeX{}, please see
-@url{http://tug.org/begin.html}.
+@url{https://tug.org/begin.html}.
 
 
 @node Debugging
@@ -3744,7 +3858,7 @@ If Metafont runs, but generates fonts at the wrong resolution or for
 the wrong device, most likely @code{mktexpk}'s built-in guess for the
 mode is wrong, and you should override it as above.
 
-See @url{http://ctan.org/pkg/modes} for a list of resolutions and mode
+See @url{https://ctan.org/pkg/modes} for a list of resolutions and mode
 names for most devices (additional submissions are welcome).
 
 @flindex .2602gf
@@ -3790,9 +3904,6 @@ running a normal input file, the problem is usually a compiler bug
 passed, problems may lurk.  Optimization occasionally causes trouble in
 programs other than @TeX{} and Metafont themselves, too.
 
-Insufficient swap space may also cause core dumps or other erratic
-behavior.
-
 @cindex optimization caveat
 For a workaround, if you enabled any optimization flags, it's best to
 omit optimization entirely.  In any case, the way to find the facts is
@@ -3809,8 +3920,7 @@ Using and Porting GNU CC}.
 To report compiler bugs effectively requires perseverance and
 perspicacity: you must find the miscompiled line, and that usually
 involves delving backwards in time from the point of error, checking
-through @TeX{}'s (or whatever program's) data structures.  Things are
-not helped by all-too-common bugs in the debugger itself.  Good luck.
+through @TeX{}'s (or whatever program's) data structures.  Good luck.
 
 
 @node Index

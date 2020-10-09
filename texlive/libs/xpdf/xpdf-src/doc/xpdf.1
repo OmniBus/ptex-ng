@@ -1,12 +1,22 @@
-.\" Copyright 1996-2017 Glyph & Cog, LLC
-.TH xpdf 1 "10 Aug 2017"
+.\" Copyright 1996-2019 Glyph & Cog, LLC
+.TH xpdf 1 "25 Sep 2019"
 .SH NAME
-xpdf \- Portable Document Format (PDF) file viewer (version 4.00)
+xpdf \- Portable Document Format (PDF) file viewer (version 4.02)
 .SH SYNOPSIS
 .B xpdf
 [options]
 .RI [ PDF-file
 .RI [: page " | +" dest "]] ..."
+.PP
+.B xpdf
+[options]
+.B -remote
+.IR remote-name " [" command " ...]"
+.PP
+.B xpdf
+[options]
+.B -open
+.RI "[" PDF-file "]"
 .SH DESCRIPTION
 .B Xpdf
 is a viewer for Portable Document Format (PDF) files.  (These are also
@@ -69,6 +79,14 @@ Set the initial window geometry.
 .BI \-title " title"
 Set the window title.  By default, the title will be "xpdf: foo.pdf".
 .TP
+.BI \-open " \fR[\fPPDF-file\fR]\fP"
+This option sets up a default remote server.  If Xpdf is already
+running (with the "-open" switch), the PDF file (if any) is opened in
+a new tab.  If Xpdf (with the "-open" switch) is not already running,
+starts Xpdf and opens the PDF file (if any).  This is useful for GUI
+desktop environments, e.g., the typical double-click on a PDF file
+case.
+.TP
 .B \-rv
 Set reverse video mode.  This reverses the colors of everything except
 images.  It may not always produce great results for PDF files which
@@ -124,6 +142,9 @@ password.
 .B \-fullscreen
 Open xpdf in full-screen mode, useful for presentations.
 .TP
+.BI \-remote " remote-name"
+Start Xpdf in remote server mode.  See the REMOVE SERVER MODE section.
+.TP
 .BI \-display " display"
 Set the X display (only available with X11).
 .TP
@@ -147,11 +168,25 @@ and
 are equivalent.)
 .PP
 .SH CONTROLS
-.SS Tool bar
+.SS Toolbar
 .TP
-.B "\'page' entry box"
+.B "toggle sidebar button"
+Toggles (i.e., shows or hides) the sidebar.
+.TP
+.B "status indicator"
+This icon is animated while Xpdf is rendering a page.  It turns red
+when an error or warning has been issued.  Clicking on it opens the
+error dialog.
+.TP
+.B "selection mode"
+This icon is an "I-beam" in linear selection mode, and an arrow in
+block selection mode.  Clicking on it toggles between the two
+selection modes.
+.TP
+.B "page number entry box"
 Move to a specific page number.  Click in the box to activate it, type
-the page number, then hit return.
+the page number, then hit return.  This will instead display and
+accept page labels, if the "view - page labels" menu item is checked.
 .TP
 .B "left/right arrow buttons"
 Go backward or forward along the history path.
@@ -168,12 +203,7 @@ Change the zoom factor to fit the page width to the window width.
 .B "fit page button"
 Change the zoom factor to fit the page to the window size.
 .TP
-.B "working/error indicator"
-This icon is animated while Xpdf is rendering a page.  It turns red
-when an error or warning has been issued.  Clicking on it opens the
-error dialog.
-.TP
-.B "\'find' box"
+.B "find entry box"
 Find a text string.  Click in the box to activate it, type a search
 string, then hit return.
 .TP
@@ -188,11 +218,11 @@ Display the current find settings: case sensitive (on/off), find whole
 words (on/off).
 .PP
 .SS Menu bar
-The menu bar is above the tool bar.  The menu items should be
+The menu bar is above the toolbar.  The menu items should be
 self-explanatory.
 .PP
 .SS Tab list
-The tab list is on the left, just below the tool bar.  It lists all
+The tab list is on the left, just below the toolbar.  It lists all
 open tabs.
 .PP
 .SS Outline/layers/attachments pane
@@ -283,6 +313,9 @@ Open a new window.
 Close the current tab.  Closes the window if this was the last open
 tab.  Quits the application if this was the last open window.
 .TP
+.B control-l
+Toggle between full-screen and window modes.
+.TP
 .B control-q
 Quit.
 .TP
@@ -349,7 +382,8 @@ Xpdf can be placed into full-screen mode via the
 command line option, the \'full screen' menu item, or a binding to the
 .B fullScreenMode
 or
-.BR toggleFullScreenMode command .
+.B toggleFullScreenMode
+command.
 .PP
 Entering full-screen mode automatically switches to single-page view
 mode and to the fit-page zoom factor.
@@ -375,6 +409,23 @@ Open the \'about' dialog.
 Set block selection mode.  In this mode, the selection is a simple
 rectangle.  Any part of the page can be selected, regardless of the
 content on the page.
+.TP
+.BI checkOpenFile( file )
+Check that
+.I file
+is open in the current tab, and open it if not.
+.TP
+.BI checkOpenFileAtDest( file, dest )
+Check that
+.I file
+is open in the current tab, and open it if not.  In either case go to
+the specified named destination.
+.TP
+.BI checkOpenFileAtPage( file, page )
+Check that
+.I file
+is open in the current tab, and open it if not.  In either case go to
+the specified page.
 .TP
 .B closeSidebar
 Close the sidebar.
@@ -406,6 +457,11 @@ End a pan operation.
 .TP
 .B endSelection
 End a selection.
+.TP
+.BI expandSidebar( n )
+Expand the sidebar by
+.I n
+pixels.  Opens the sidebar if it is currently closed.
 .TP
 .B find
 Set keyboard focus to the \'find' box.
@@ -471,12 +527,21 @@ Go to the specified page.
 .BI help
 Open the help URL.
 .TP
+.B hideToolbar
+Hide the toolbar.
+.TP
 .B horizontalContinuousMode
 Switch to horizontal continuous view mode.
 .TP
 .B linearSelectMode
 Set linear selection mode.  In this mode, the selection follows text.
 Non-text regions cannot be selected.
+.TP
+.BI loadTabState
+Load the tab state file (which was written via the saveTabState
+command), and restore the tabs listed in that file.  The path for the
+tab state file is specified with the tabStateFile setting (see
+.BR xpdfrc (5)).
 .TP
 .B newTab
 Open an empty new tab.
@@ -494,10 +559,36 @@ Go to the next page, with the current relative scroll position.
 Switch to the next tab.
 .TP
 .B open
-Open a PDF file in this tab, using the open dialog.
+Open a PDF file in the current tab, using the open dialog.
 .TP
 .B openErrorWindow
 Open the error window.
+.TP
+.BI openFile( file )
+Open the specified file in the current tab.
+.TP
+.BI openFileAtDest( file, dest )
+Open the specified file in the current tab at the specified named
+destination.
+.TP
+.BI openFileAtDestIn( file, dest, location )
+Open the specified file at the specified named destination.  Location
+must be "win" for a new window or "tab" for a new tab.
+.TP
+.BI openFileAtPage( file, page )
+Open the specified file in the current tab at the specified page.
+.TP
+.BI openFileAtPageIn( file, page, location )
+Open the specified file at the specified page.  Location must be "win"
+for a new window or "tab" for a new tab.
+.TP
+.BI openFileIn( file, location )
+Open the specified file.  Location must be "win" for a new window or
+"tab" for a new tab.
+.TP
+.BI openIn( location )
+Open a PDF file, using the open dialog.  Location must be "win" for a
+new window or "tab" for a new tab.
 .TP
 .B openSidebar
 Open the sidebar.
@@ -579,6 +670,10 @@ command must be quoted in the xpdfrc file:
     bind x "run(ls -l)"
 
 .fi
+The command string may not be run through a shell.  It is recommended
+to keep the command simple, so that it doesn't depend on specific
+shell functionality.  For complex things, you can have the command
+string run a shell script.
 .TP
 .B saveAs
 Save PDF via a file requester.
@@ -586,12 +681,20 @@ Save PDF via a file requester.
 .B saveImage
 Open the \'save image' dialog.
 .TP
+.BI saveTabState
+Save a list of all tabs open in this window to the tab state file.
+For each tab, this writes the PDF file name and page number (on
+separate lines).  This file can be loaded later with the loadTabState
+command.  The path for the tab state file is specified with the
+tabStateFile setting (see
+.BR xpdfrc (5)).
+.TP
 .BI scrollDown( n )
 Scroll down by
 .I n
 pixels.
 .TP
-.BI scrollDownPrevPage( n )
+.BI scrollDownNextPage( n )
 Scroll down by
 .I n
 pixels, moving to the next page if appropriate.
@@ -617,11 +720,11 @@ Scroll right by
 pixels.
 .TP
 .B scrollToBottomEdge
-Scroll to the bottom edge of the current page, with no horizontal
-movement.
+Scroll to the bottom edge of the last displayed page, with no
+horizontal movement.
 .TP
 .B scrollToBottomRight
-Scroll to the bottom-right corner of the current page.
+Scroll to the bottom-right corner of the last displayed page.
 .TP
 .B scrollToLeftEdge
 Scroll to the left edge of the current page, with no vertical
@@ -632,11 +735,11 @@ Scroll to the right edge of the current page, with no vertical
 movement.
 .TP
 .B scrollToTopEdge
-Scroll to the top edge of the current page, with no horizontal
+Scroll to the top edge of the first displayed page, with no horizontal
 movement.
 .TP
 .B scrollToTopLeft
-Scroll to the top-left corner of the current page.
+Scroll to the top-left corner of the first displayed page.
 .TP
 .BI scrollUp( n )
 Scroll up by
@@ -650,6 +753,15 @@ pixels, moving to the previous page if appropriate.
 .TP
 .BI setSelection( pg , ulx , uly , lrx , lry )
 Set the selection to the specified coordinates on the specified page.
+.TP
+.B showToolbar
+Show the toolbar.
+.TP
+.BI shrinkSidebar( n )
+Shrink the sidebar by
+.I n
+pixels.  Closes the sidebar if shrinking it would go below the minimum
+allowed side.
 .TP
 .B sideBySideContinuousMode
 Switch to side-by-side continuous view mode.
@@ -689,6 +801,15 @@ the document stays in the same place on the screen.
 Toggle the sidebar between open and closed, resizing the window so
 that the document size doesn't change.
 .TP
+.B toggleToolbar
+Toggle the toolbar between shown and hidden.
+.TP
+.B viewPageLabels
+Show page labels (if the PDF file has them), rather than page numbers.
+.TP
+.B viewPageNumbers
+Show page numbers, rather than page labels.
+.TP
 .B windowMode
 Go to window (non-full-screen) mode.
 .TP
@@ -710,6 +831,25 @@ Set the zoom factor to
 .TP
 .B zoomToSelection
 Zoom to the current selection.
+.SH REMOTE SERVER MODE
+Starting xpdf with the "-remote" switch puts it into remote server
+mode.  All remaining command line options are commands (see the
+COMMANDS section).  Subsequent invocations of "xpdf -remote" with the
+same remote server name will send commands to the already-running
+instance of xpdf.  The "checkOpenFile" commands are useful here for
+things like changing pages.
+For example:
+.PP
+.RS
+    # Start up xpdf, and open something.pdf.
+    xpdf -remote foo 'openFile(something.pdf)'
+
+    # Switch to page 7 in the already-open something.pdf.  If the user
+    # has closed xpdf in the meantime, this will restart it and reopen
+    # the file.
+    xpdf -remote foo 'checkOpenFileAtPage(something.pdf, 7)'
+.RE
+.PP
 .SH EXIT CODES
 The Xpdf tools use the following exit codes:
 .TP
@@ -728,7 +868,7 @@ Error related to PDF permissions.
 99
 Other error.
 .SH AUTHOR
-The xpdf software and documentation are copyright 1996-2017 Glyph &
+The xpdf software and documentation are copyright 1996-2019 Glyph &
 Cog, LLC.
 .SH "SEE ALSO"
 .BR pdftops (1),

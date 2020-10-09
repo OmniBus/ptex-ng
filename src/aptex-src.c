@@ -1,6 +1,6 @@
 /*
    Copyright 2007 TeX Users Group
-   Copyright 2014, 2015, 2016, 2017, 2018 Clerk Ma
+   Copyright 2014, 2015, 2016, 2017, 2018, 2019, 2020 Clerk Ma
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -119,20 +119,19 @@ static void print_aptex_usage (void)
 
 static void print_aptex_version (void)
 {
-  printf("Copyright 2014, 2015, 2016, 2017, 2018 Clerk Ma.\n"
+  printf("Copyright 2014, 2015, 2016, 2017, 2018, 2019, 2020 Clerk Ma.\n"
     "banner: \"%s\"\n"
-    "base: Y&Y TeX 2.3.0, pTeX 3.8.1, upTeX 1.23\n"
+    "base: Y&Y TeX 2.3.0, pTeX%s, upTeX%s\n"
     "Compiled with %s\n"
     "Compiled with %s\n"
     "Compiled with libotf version %s\n"
     "Compiled with zlib version %s\n"
-    "Compiled with libyaml version %s\n"
     "Compiled with mruby version %s\n"
     "Compiled with synctex (build-in edition)\n"
     "Compiled with libdpx (build-in dvipdfmx)\n",
-    banner, kpathsea_version_string,
-    ptexenc_version_string, LIBOTF_VERSION, zlib_version,
-    yaml_get_version_string(), MRUBY_VERSION);
+    banner, pTeX_version_string, upTeX_version_string,
+    kpathsea_version_string, ptexenc_version_string,
+    LIBOTF_VERSION, zlib_version, MRUBY_VERSION);
   aptex_utils_exit(EXIT_SUCCESS);
 }
 
@@ -1558,6 +1557,8 @@ void aptex_run (int argc, char ** argv)
 
   // for synctex
   synctex_option = INT_MAX;
+  stop_at_space = true;
+  is_in_csname = false;
   // for kpathsea init
   kpse_set_program_name(aptex_env.argv[0], NULL);
   kpse_set_program_enabled(kpse_fontmap_format, true, kpse_src_texmf_cnf);
@@ -1645,7 +1646,7 @@ static boolean is_char_ascii (integer c)
 static boolean is_char_kanji (integer c)
 {
   if (is_internalUPTEX())
-    return (c >= 0 && (c & CJK_TOKEN_FLAG) < max_cjk_val);
+    return (c >= 0);
   else
     return iskanji1(Hi(c)) && iskanji2(Lo(c));
 }
@@ -1755,8 +1756,9 @@ static long ucs_range[] =
   0x1C00, /* Lepcha                                              */
   0x1C50, /* Ol Chiki                                            */
   0x1C80, /* Cyrillic Extended-C                                 */
-  0x1CC0, /* Sundanese Supplement                                */
-  0x1CD0, /* Vedic Extensions                                    */ /* 0x40 */
+  0x1C90, /* Georgian Extended                                   */
+  0x1CC0, /* Sundanese Supplement                                */ /* 0x40 */
+  0x1CD0, /* Vedic Extensions                                    */
   0x1D00, /* Phonetic Extensions                                 */
   0x1D80, /* Phonetic Extensions Supplement                      */
   0x1DC0, /* Combining Diacritical Marks Supplement              */
@@ -1771,8 +1773,8 @@ static long ucs_range[] =
   0x2190, /* Arrows                                              */
   0x2200, /* Mathematical Operators                              */
   0x2300, /* Miscellaneous Technical                             */
-  0x2400, /* Control Pictures                                    */
-  0x2440, /* Optical Character Recognition                       */ /* 0x50 */
+  0x2400, /* Control Pictures                                    */ /* 0x50 */
+  0x2440, /* Optical Character Recognition                       */
   0x2460, /* Enclosed Alphanumerics                              */
   0x2500, /* Box Drawing                                         */
   0x2580, /* Block Elements                                      */
@@ -1787,8 +1789,8 @@ static long ucs_range[] =
   0x2A00, /* Supplemental Mathematical Operators                 */
   0x2B00, /* Miscellaneous Symbols and Arrows                    */
   0x2C00, /* Glagolitic                                          */
-  0x2C60, /* Latin Extended-C                                    */
-  0x2C80, /* Coptic                                              */ /* 0x60 */
+  0x2C60, /* Latin Extended-C                                    */ /* 0x60 */
+  0x2C80, /* Coptic                                              */
   0x2D00, /* Georgian Supplement                                 */
   0x2D30, /* Tifinagh                                            */
   0x2D80, /* Ethiopic Extended                                   */
@@ -1803,8 +1805,8 @@ static long ucs_range[] =
   0x3100, /* Bopomofo                                            */
   0x3130, /* Hangul Compatibility Jamo                           */
   0x3190, /* Kanbun                                              */
-  0x31A0, /* Bopomofo Extended                                   */
-  0x31C0, /* CJK Strokes                                         */ /* 0x70 */
+  0x31A0, /* Bopomofo Extended                                   */ /* 0x70 */
+  0x31C0, /* CJK Strokes                                         */
   0x31F0, /* Katakana Phonetic Extensions                        */
   0x3200, /* Enclosed CJK Letters and Months                     */
   0x3300, /* CJK Compatibility                                   */
@@ -1819,8 +1821,8 @@ static long ucs_range[] =
   0xA6A0, /* Bamum                                               */
   0xA700, /* Modifier Tone Letters                               */
   0xA720, /* Latin Extended-D                                    */
-  0xA800, /* Syloti Nagri                                        */
-  0xA830, /* Common Indic Number Forms                           */ /* 0x80 */
+  0xA800, /* Syloti Nagri                                        */ /* 0x80 */
+  0xA830, /* Common Indic Number Forms                           */
   0xA840, /* Phags-pa                                            */
   0xA880, /* Saurashtra                                          */
   0xA8E0, /* Devanagari Extended                                 */
@@ -1835,8 +1837,8 @@ static long ucs_range[] =
   0xAAE0, /* Meetei Mayek Extensions                             */
   0xAB00, /* Ethiopic Extended-A                                 */
   0xAB30, /* Latin Extended-E                                    */
-  0xAB70, /* Cherokee Supplement                                 */
-  0xABC0, /* Meetei Mayek                                        */ /* 0x90 */
+  0xAB70, /* Cherokee Supplement                                 */ /* 0x90 */
+  0xABC0, /* Meetei Mayek                                        */
   0xAC00, /* Hangul Syllables                                    */
   0xD7B0, /* Hangul Jamo Extended-B                              */
   0xD800, /* High Surrogates                                     */
@@ -1851,143 +1853,170 @@ static long ucs_range[] =
   0xFE20, /* Combining Half Marks                                */
   0xFE30, /* CJK Compatibility Forms                             */
   0xFE50, /* Small Form Variants                                 */
-  0xFE70, /* Arabic Presentation Forms-B                         */
-  0xFF00, /* Halfwidth and Fullwidth Forms                       */ /* 0xa0 */
+  0xFE70, /* Arabic Presentation Forms-B                         */ /* 0xA0 */
+  0xFF00, /* Halfwidth and Fullwidth Forms                       */
   0xFFF0, /* Specials                                            */
-  0x10000, /* Linear B Syllabary                                 */
-  0x10080, /* Linear B Ideograms                                 */
-  0x10100, /* Aegean Numbers                                     */
-  0x10140, /* Ancient Greek Numbers                              */
-  0x10190, /* Ancient Symbols                                    */
-  0x101D0, /* Phaistos Disc                                      */
-  0x10280, /* Lycian                                             */
-  0x102A0, /* Carian                                             */
-  0x102E0, /* Coptic Epact Numbers                               */
-  0x10300, /* Old Italic                                         */
-  0x10330, /* Gothic                                             */
-  0x10350, /* Old Permic                                         */
-  0x10380, /* Ugaritic                                           */
-  0x103A0, /* Old Persian                                        */
-  0x10400, /* Deseret                                            */ /* 0xb0 */
-  0x10450, /* Shavian                                            */
-  0x10480, /* Osmanya                                            */
-  0x104B0, /* Osage                                              */
-  0x10500, /* Elbasan                                            */
-  0x10530, /* Caucasian Albanian                                 */
-  0x10600, /* Linear A                                           */
-  0x10800, /* Cypriot Syllabary                                  */
-  0x10840, /* Imperial Aramaic                                   */
-  0x10860, /* Palmyrene                                          */
-  0x10880, /* Nabataean                                          */
-  0x108E0, /* Hatran                                             */
-  0x10900, /* Phoenician                                         */
-  0x10920, /* Lydian                                             */
-  0x10980, /* Meroitic Hieroglyphs                               */
-  0x109A0, /* Meroitic Cursive                                   */
-  0x10A00, /* Kharoshthi                                         */ /* 0xc0 */
-  0x10A60, /* Old South Arabian                                  */
-  0x10A80, /* Old North Arabian                                  */
-  0x10AC0, /* Manichaean                                         */
-  0x10B00, /* Avestan                                            */
-  0x10B40, /* Inscriptional Parthian                             */
-  0x10B60, /* Inscriptional Pahlavi                              */
-  0x10B80, /* Psalter Pahlavi                                    */
-  0x10C00, /* Old Turkic                                         */
-  0x10C80, /* Old Hungarian                                      */
-  0x10E60, /* Rumi Numeral Symbols                               */
-  0x11000, /* Brahmi                                             */
-  0x11080, /* Kaithi                                             */
-  0x110D0, /* Sora Sompeng                                       */
-  0x11100, /* Chakma                                             */
-  0x11150, /* Mahajani                                           */
-  0x11180, /* Sharada                                            */ /* 0xd0 */
-  0x111E0, /* Sinhala Archaic Numbers                            */
-  0x11200, /* Khojki                                             */
-  0x11280, /* Multani                                            */
-  0x112B0, /* Khudawadi                                          */
-  0x11300, /* Grantha                                            */
-  0x11400, /* Newa                                               */
-  0x11480, /* Tirhuta                                            */
-  0x11580, /* Siddham                                            */
-  0x11600, /* Modi                                               */
-  0x11660, /* Mongolian Supplement                               */
-  0x11680, /* Takri                                              */
-  0x11700, /* Ahom                                               */
-  0x118A0, /* Warang Citi                                        */
-  0x11A00, /* Zanabazar Square                                   */
-  0x11A50, /* Soyombo                                            */
-  0x11AC0, /* Pau Cin Hau                                        */ /* 0xe0 */
-  0x11C00, /* Bhaiksuki                                          */
-  0x11C70, /* Marchen                                            */
-  0x11D00, /* Masaram Gondi                                      */
-  0x12000, /* Cuneiform                                          */
-  0x12400, /* Cuneiform Numbers and Punctuation                  */
-  0x12480, /* Early Dynastic Cuneiform                           */
-  0x13000, /* Egyptian Hieroglyphs                               */
-  0x14400, /* Anatolian Hieroglyphs                              */
-  0x16800, /* Bamum Supplement                                   */
-  0x16A40, /* Mro                                                */
-  0x16AD0, /* Bassa Vah                                          */
-  0x16B00, /* Pahawh Hmong                                       */
-  0x16F00, /* Miao                                               */
-  0x16FE0, /* Ideographic Symbols and Punctuation                */
-  0x17000, /* Tangut                                             */
-  0x18800, /* Tangut Components                                  */ /* 0xf0 */
-  0x1B000, /* Kana Supplement                                    */
-  0x1B100, /* Kana Extended-A                                    */
-  0x1B170, /* Nushu                                              */
-  0x1BC00, /* Duployan                                           */
-  0x1BCA0, /* Shorthand Format Controls                          */
-  0x1D000, /* Byzantine Musical Symbols                          */
-  0x1D100, /* Musical Symbols                                    */
-  0x1D200, /* Ancient Greek Musical Notation                     */
-  0x1D300, /* Tai Xuan Jing Symbols                              */
-  0x1D360, /* Counting Rod Numerals                              */
-  0x1D400, /* Mathematical Alphanumeric Symbols                  */
-  0x1D800, /* Sutton SignWriting                                 */
-  0x1E000, /* Glagolitic Supplement                              */
-  0x1E800, /* Mende Kikakui                                      */
-  0x1E900, /* Adlam                                              */
-  0x1EE00, /* Arabic Mathematical Alphabetic Symbols             */ /* 0x100 */
-  0x1F000, /* Mahjong Tiles                                      */
-  0x1F030, /* Domino Tiles                                       */
-  0x1F0A0, /* Playing Cards                                      */
-  0x1F100, /* Enclosed Alphanumeric Supplement                   */
-  0x1F200, /* Enclosed Ideographic Supplement                    */
-  0x1F300, /* Miscellaneous Symbols and Pictographs              */
-  0x1F600, /* Emoticons                                          */
-  0x1F650, /* Ornamental Dingbats                                */
-  0x1F680, /* Transport and Map Symbols                          */
-  0x1F700, /* Alchemical Symbols                                 */
-  0x1F780, /* Geometric Shapes Extended                          */
-  0x1F800, /* Supplemental Arrows-C                              */
-  0x1F900, /* Supplemental Symbols and Pictographs               */
-  0x20000, /* CJK Unified Ideographs Extension B                 */
-  0x2A700, /* CJK Unified Ideographs Extension C                 */
-  0x2B740, /* CJK Unified Ideographs Extension D                 */ /* 0x110 */
-  0x2B820, /* CJK Unified Ideographs Extension E                 */
-  0x2CEB0, /* CJK Unified Ideographs Extension F                 */
-  0x2F800, /* CJK Compatibility Ideographs Supplement            */
-  0x30000, /* reserved                                           */
-  0x40000, /* reserved                                           */
-  0x50000, /* reserved                                           */
-  0x60000, /* reserved                                           */
-  0x70000, /* reserved                                           */
-  0x80000, /* reserved                                           */
-  0x90000, /* reserved                                           */
-  0xA0000, /* reserved                                           */
-  0xB0000, /* reserved                                           */
-  0xC0000, /* reserved                                           */
-  0xD0000, /* reserved                                           */
-  0xE0000, /* Tags                                               */
-  0xE0100, /* Variation Selectors Supplement                     */ /* 0x120 */
-  0xF0000, /* Supplementary Private Use Area-A                   */
-  0x100000, /* Supplementary Private Use Area-B                  */
+  0x10000, /* Linear B Syllabary                                  */
+  0x10080, /* Linear B Ideograms                                  */
+  0x10100, /* Aegean Numbers                                      */
+  0x10140, /* Ancient Greek Numbers                               */
+  0x10190, /* Ancient Symbols                                     */
+  0x101D0, /* Phaistos Disc                                       */
+  0x10280, /* Lycian                                              */
+  0x102A0, /* Carian                                              */
+  0x102E0, /* Coptic Epact Numbers                                */
+  0x10300, /* Old Italic                                          */
+  0x10330, /* Gothic                                              */
+  0x10350, /* Old Permic                                          */
+  0x10380, /* Ugaritic                                            */
+  0x103A0, /* Old Persian                                         */ /* 0xB0 */
+  0x10400, /* Deseret                                             */
+  0x10450, /* Shavian                                             */
+  0x10480, /* Osmanya                                             */
+  0x104B0, /* Osage                                               */
+  0x10500, /* Elbasan                                             */
+  0x10530, /* Caucasian Albanian                                  */
+  0x10600, /* Linear A                                            */
+  0x10800, /* Cypriot Syllabary                                   */
+  0x10840, /* Imperial Aramaic                                    */
+  0x10860, /* Palmyrene                                           */
+  0x10880, /* Nabataean                                           */
+  0x108E0, /* Hatran                                              */
+  0x10900, /* Phoenician                                          */
+  0x10920, /* Lydian                                              */
+  0x10980, /* Meroitic Hieroglyphs                                */
+  0x109A0, /* Meroitic Cursive                                    */ /* 0xC0 */
+  0x10A00, /* Kharoshthi                                          */
+  0x10A60, /* Old South Arabian                                   */
+  0x10A80, /* Old North Arabian                                   */
+  0x10AC0, /* Manichaean                                          */
+  0x10B00, /* Avestan                                             */
+  0x10B40, /* Inscriptional Parthian                              */
+  0x10B60, /* Inscriptional Pahlavi                               */
+  0x10B80, /* Psalter Pahlavi                                     */
+  0x10C00, /* Old Turkic                                          */
+  0x10C80, /* Old Hungarian                                       */
+  0x10D00, /* Hanifi Rohingya                                     */
+  0x10E60, /* Rumi Numeral Symbols                                */
+  0x10E80, /* Yezidi                                              */
+  0x10F00, /* Old Sogdian                                         */
+  0x10F30, /* Sogdian                                             */
+  0x10FB0, /* Chorasmian                                          */ /* 0xD0 */
+  0x10FE0, /* Elymaic                                             */
+  0x11000, /* Brahmi                                              */
+  0x11080, /* Kaithi                                              */
+  0x110D0, /* Sora Sompeng                                        */
+  0x11100, /* Chakma                                              */
+  0x11150, /* Mahajani                                            */
+  0x11180, /* Sharada                                             */
+  0x111E0, /* Sinhala Archaic Numbers                             */
+  0x11200, /* Khojki                                              */
+  0x11280, /* Multani                                             */
+  0x112B0, /* Khudawadi                                           */
+  0x11300, /* Grantha                                             */
+  0x11400, /* Newa                                                */
+  0x11480, /* Tirhuta                                             */
+  0x11580, /* Siddham                                             */
+  0x11600, /* Modi                                                */ /* 0xE0 */
+  0x11660, /* Mongolian Supplement                                */
+  0x11680, /* Takri                                               */
+  0x11700, /* Ahom                                                */
+  0x11800, /* Dogra                                               */
+  0x118A0, /* Warang Citi                                         */
+  0x11900, /* Dives Akuru                                         */
+  0x119A0, /* Nandinagari                                         */
+  0x11A00, /* Zanabazar Square                                    */
+  0x11A50, /* Soyombo                                             */
+  0x11AC0, /* Pau Cin Hau                                         */
+  0x11C00, /* Bhaiksuki                                           */
+  0x11C70, /* Marchen                                             */
+  0x11D00, /* Masaram Gondi                                       */
+  0x11D60, /* Gunjala Gondi                                       */
+  0x11EE0, /* Makasar                                             */
+  0x11FB0, /* Lisu Supplement                                     */ /* 0xF0 */
+  0x11FC0, /* Tamil Supplement                                    */
+  0x12000, /* Cuneiform                                           */
+  0x12400, /* Cuneiform Numbers and Punctuation                   */
+  0x12480, /* Early Dynastic Cuneiform                            */
+  0x13000, /* Egyptian Hieroglyphs                                */
+  0x13430, /* Egyptian Hieroglyph Format Controls                 */
+  0x14400, /* Anatolian Hieroglyphs                               */
+  0x16800, /* Bamum Supplement                                    */
+  0x16A40, /* Mro                                                 */
+  0x16AD0, /* Bassa Vah                                           */
+  0x16B00, /* Pahawh Hmong                                        */
+  0x16E40, /* Medefaidrin                                         */
+  0x16F00, /* Miao                                                */
+  0x16FE0, /* Ideographic Symbols and Punctuation                 */
+  0x17000, /* Tangut                                              */
+  0x18800, /* Tangut Components                                   */ /* 0x100 */
+  0x18B00, /* Khitan Small Script                                 */
+  0x18D00, /* Tangut Supplement                                   */
+  0x1B000, /* Kana Supplement                                     */
+  0x1B100, /* Kana Extended-A                                     */
+  0x1B130, /* Small Kana Extension                                */
+  0x1B170, /* Nushu                                               */
+  0x1BC00, /* Duployan                                            */
+  0x1BCA0, /* Shorthand Format Controls                           */
+  0x1D000, /* Byzantine Musical Symbols                           */
+  0x1D100, /* Musical Symbols                                     */
+  0x1D200, /* Ancient Greek Musical Notation                      */
+  0x1D2E0, /* Mayan Numerals                                      */
+  0x1D300, /* Tai Xuan Jing Symbols                               */
+  0x1D360, /* Counting Rod Numerals                               */
+  0x1D400, /* Mathematical Alphanumeric Symbols                   */
+  0x1D800, /* Sutton SignWriting                                  */ /* 0x110 */
+  0x1E000, /* Glagolitic Supplement                               */
+  0x1E100, /* Nyiakeng Puachue Hmong                              */
+  0x1E2C0, /* Wancho                                              */
+  0x1E800, /* Mende Kikakui                                       */
+  0x1E900, /* Adlam                                               */
+  0x1EC70, /* Indic Siyaq Numbers                                 */
+  0x1ED00, /* Ottoman Siyaq Numbers                               */
+  0x1EE00, /* Arabic Mathematical Alphabetic Symbols              */
+  0x1F000, /* Mahjong Tiles                                       */
+  0x1F030, /* Domino Tiles                                        */
+  0x1F0A0, /* Playing Cards                                       */
+  0x1F100, /* Enclosed Alphanumeric Supplement                    */
+  0x1F200, /* Enclosed Ideographic Supplement                     */
+  0x1F300, /* Miscellaneous Symbols and Pictographs               */
+  0x1F600, /* Emoticons                                           */
+  0x1F650, /* Ornamental Dingbats                                 */ /* 0x120 */
+  0x1F680, /* Transport and Map Symbols                           */
+  0x1F700, /* Alchemical Symbols                                  */
+  0x1F780, /* Geometric Shapes Extended                           */
+  0x1F800, /* Supplemental Arrows-C                               */
+  0x1F900, /* Supplemental Symbols and Pictographs                */
+  0x1FA00, /* Chess Symbols                                       */
+  0x1FA70, /* Symbols and Pictographs Extended-A                  */
+  0x1FB00, /* Symbols for Legacy Computing                        */
+  0x20000, /* CJK Unified Ideographs Extension B                  */
+  0x2A700, /* CJK Unified Ideographs Extension C                  */
+  0x2B740, /* CJK Unified Ideographs Extension D                  */
+  0x2B820, /* CJK Unified Ideographs Extension E                  */
+  0x2CEB0, /* CJK Unified Ideographs Extension F                  */
+  0x2F800, /* CJK Compatibility Ideographs Supplement             */
+  0x30000, /* CJK Unified Ideographs Extension G                  */
+  0x31350, /* Reserved                                            */ /* 0x130 */
+  0x40000, /* Reserved                                            */
+  0x50000, /* Reserved                                            */
+  0x60000, /* Reserved                                            */
+  0x70000, /* Reserved                                            */
+  0x80000, /* Reserved                                            */
+  0x90000, /* Reserved                                            */
+  0xA0000, /* Reserved                                            */
+  0xB0000, /* Reserved                                            */
+  0xC0000, /* Reserved                                            */
+  0xD0000, /* Reserved                                            */
+  0xE0000, /* Tags                                                */
+  0xE0100, /* Variation Selectors Supplement                      */
+  0xF0000, /* Supplementary Private Use Area-A                    */
+  0x100000, /* Supplementary Private Use Area-B                    */
 /* Value over 0x10FFFF is illegal under Unicode, They are for some special use.  *** experimental ***  */
   0x110000, /* Reserved                                          */
   0x120000, /* Reserved                                          */
   0x130000, /* Reserved                                          */
-  0x140000, /* Reserved                                          */
+  0x140000, /* Reserved                                          */ /* 0x140 */
   0x150000, /* Reserved                                          */
   0x160000, /* Reserved                                          */
   0x170000, /* Reserved                                          */
@@ -1997,11 +2026,11 @@ static long ucs_range[] =
   0x1B0000, /* Reserved                                          */
   0x1C0000, /* Reserved                                          */
   0x1D0000, /* Reserved                                          */
-  0x1E0000, /* Reserved                                          */ /* 0x130 */
+  0x1E0000, /* Reserved                                          */
   0x1F0000, /* Reserved                                          */
   0x200000, /* Reserved                                          */
   0x210000, /* Reserved                                          */
-  0x220000, /* Reserved                                          */
+  0x220000, /* Reserved                                          */ /* 0x150 */
   max_cjk_val
 };
 
@@ -2063,7 +2092,7 @@ static integer kcatcodekey (integer c)
         return 0x01FD;
     }
 
-    if (block == 0xa0)
+    if (block == 0xa1)
     {
       /* Fullwidth ASCII variants  except for U+FF01..FF0F, U+FF1A..FF20, U+FF3B..FF40, U+FF5B..FF5E */
       if ((FULLWIDTH_DIGIT_0 <= c && c <= FULLWIDTH_DIGIT_9)
@@ -3577,6 +3606,8 @@ static void reset_trie(void);
 static boolean get_strings_started(void);
 static void init_prim(void);
 static void store_fmt_file(void);
+static boolean str_eq_str(str_number s, str_number t);
+static pointer prim_lookup(str_number s);
 static void primitive_(str_number s, quarterword c, halfword o);
 static void fix_date_and_time(void);
 
@@ -3803,40 +3834,46 @@ static void do_initex (void)
   if (is_internalUPTEX())
   {
     kcat_code(0x0) = not_cjk; // { default: other_kchar }
-    kcat_code(0x2) = not_cjk; // { Latin Extended-A }
+ 
+    for (k = 0x2; k <= 0x3; k++)
+      kcat_code(k) = not_cjk; // { Latin Extended-A, Latin Extended-B }
+
     kcat_code(0x24) = hangul; // { Hangul Jamo }
+    kcat_code(0x45) = not_cjk; // { Latin Extended Additional }
 
     // { CJK Radicals Supplement .. Ideographic Description Characters }
-    for (k = 0x66; k <= 0x68; k++)
+    for (k = 0x67; k <= 0x69; k++)
       kcat_code(k) = kanji;
 
     // { Hiragana, Katakana }
-    for (k = 0x6A; k <= 0x6B; k++)
+    for (k = 0x6B; k <= 0x6C; k++)
       kcat_code(k) = kana;
 
-    kcat_code(0x6C) = kanji; // { Bopomofo }
-    kcat_code(0x6D) = hangul; // { Hangul Compatibility Jamo }
+    kcat_code(0x6D) = kanji; // { Bopomofo }
+    kcat_code(0x6E) = hangul; // { Hangul Compatibility Jamo }
 
     // { Kanbun .. CJK Strokes }
-    for (k = 0x6E; k <= 0x70; k++)
+    for (k = 0x6F; k <= 0x71; k++)
       kcat_code(k) = kanji;
 
-    kcat_code(0x71) = kana; // { Katakana Phonetic Extensions }
-    kcat_code(0x74) = kanji; // { CJK Unified Ideographs Extension A }
-    kcat_code(0x76) = kanji; // { CJK Unified Ideographs }
-    kcat_code(0x86) = hangul; // { Hangul Jamo Extended-A }
-    kcat_code(0x91) = hangul; // { Hangul Syllables }
-    kcat_code(0x92) = hangul; // { Hangul Jamo Extended-B }
-    kcat_code(0x97) = kanji; // { CJK Compatibility Ideographs }
-    // { kcat_code(0xA0) = other_kchar; Halfwidth and Fullwidth Forms }
-    kcat_code(0xF1) = kana; // { Kana Supplement }
-    kcat_code(0xF2) = kana; // { Kana Extended-A }
+    kcat_code(0x72) = kana; // { Katakana Phonetic Extensions }
+    kcat_code(0x75) = kanji; // { CJK Unified Ideographs Extension A }
+    kcat_code(0x77) = kanji; // { CJK Unified Ideographs }
+    kcat_code(0x87) = hangul; // { Hangul Jamo Extended-A }
+    kcat_code(0x92) = hangul; // { Hangul Syllables }
+    kcat_code(0x93) = hangul; // { Hangul Jamo Extended-B }
+    kcat_code(0x98) = kanji; // { CJK Compatibility Ideographs }
+    // { kcat_code(0xA1) = other_kchar; Halfwidth and Fullwidth Forms }
+
+    // { Kana Supplement .. Small Kana Extension }
+    for (k = 0x103; k <= 0x105; k++)
+      kcat_code(0xF1) = kana;
  
     // { CJK Unified Ideographs Extension B .. CJK Compatibility Ideographs Supplement }
-    for (k = 0x10E; k <= 0x113; k++)
+    for (k = 0x129; k <= 0x12F; k++)
       kcat_code(k) = kanji;
 
-    /* kcat_code(0x1FD) = not_cjk; */ // { Latin-1 Letters }
+    kcat_code(0x1FD) = not_cjk; // { Latin-1 Letters }
     kcat_code(0x1FE) = kana; // { Fullwidth digit and latin alphabet }
     kcat_code(0x1FF) = kana; // { Halfwidth katakana }
   }
@@ -3858,7 +3895,6 @@ static void do_initex (void)
       kcat_code(0xA0 + k) = kanji; // {2 men 16 ku ... 94 ku}
   };
 
-
   for (k = int_base; k <= del_code_base - 1; k++)
     eqtb[k].cint = 0;
 
@@ -3869,6 +3905,7 @@ static void do_initex (void)
   escape_char = '\\';
   end_line_char = carriage_return;
   pdf_compress_level = 9;
+  pdf_major_version = 1;
   pdf_minor_version = 5;
 
   for (k = 0; k <= 255; k++)
@@ -3886,7 +3923,12 @@ static void do_initex (void)
     puts("initex cs_count = 0 ");
 
   eq_type(frozen_dont_expand) = dont_expand;
+  prim_used = prim_size; // {nothing is used}
   text(frozen_dont_expand) = 499;  /* "notexpanded:" */
+  eq_type(frozen_primitive) = ignore_spaces;
+  equiv(frozen_primitive) = 1;
+  eq_level(frozen_primitive) = level_one;
+  text(frozen_primitive) = make_str_string("pdfprimitive");
 
   font_ptr                    = null_font;
   fmem_ptr                    = 7;
@@ -4014,6 +4056,31 @@ static void initialize (void)
   interrupt = 0;
   OK_to_interrupt = true;
 
+  /* Random numbers. */
+  two_to_the[0] = 1;
+
+  for (k = 1; k <= 30; k++)
+    two_to_the[k] = 2 * two_to_the[k - 1];
+
+  spec_log[1] = 93032640;
+  spec_log[2] = 38612034;
+  spec_log[3] = 17922280;
+  spec_log[4] = 8662214;
+  spec_log[5] = 4261238;
+  spec_log[6] = 2113709;
+  spec_log[7] = 1052693;
+  spec_log[8] = 525315;
+  spec_log[9] = 262400;
+  spec_log[10] = 131136;
+  spec_log[11] = 65552;
+  spec_log[12] = 32772;
+  spec_log[13] = 16385;
+
+  for (k = 14; k <= 27; k++)
+    spec_log[k] = two_to_the[27 - k];
+
+  spec_log[28] = 1;
+
 #ifdef APTEX_DEBUG
   was_mem_end = mem_min;
   was_lo_max = mem_bot; // mem_min
@@ -4057,6 +4124,12 @@ static void initialize (void)
     xeq_level[k] = level_one;
 
   no_new_control_sequence = true;
+  prim_next(0) = 0;
+  prim_text(0) = 0;
+
+  for (k = 1; k <= prim_size; k++)
+    prim[k] = prim[0];
+
   next(hash_base) = 0;
   text(hash_base) = 0;
 
@@ -4164,8 +4237,10 @@ static void initialize (void)
   sa_level = level_zero;
   page_disc = null;
   split_disc = null;
-  inhibit_glue_flag = false;
   page_dir = dir_yoko;
+
+  aptex_utils_get_seconds_and_micros(&epochseconds, &microseconds);
+  aptex_utils_init_start_time();
 
   if (aptex_env.flag_initex)
     do_initex();
@@ -4410,6 +4485,9 @@ static boolean load_fmt_file (void)
 
   undump_int(cs_count);
 
+  for (p = 0; p <= prim_size; p++)
+    undump_hh(prim[p]);
+
   // Undump the font information
   {
     undump_int(x); /* font_mem_size */
@@ -4629,7 +4707,7 @@ static void final_cleanup (void)
       show_save_groups();
   }
 
-  while (cond_ptr != 0)
+  while (cond_ptr != null)
   {
     print_nl("(");
     print_esc("end occurred ");
@@ -4638,7 +4716,7 @@ static void final_cleanup (void)
 
     if (if_line != 0)
     {
-      prints("on line ");
+      prints(" on line ");
       print_int(if_line);
     }
 
@@ -4669,7 +4747,7 @@ static void final_cleanup (void)
     {
       for (c = top_mark_code; c <= split_bot_mark_code; c++)
       {
-        if (cur_mark[c] != 0)
+        if (cur_mark[c] != null)
           delete_token_ref(cur_mark[c]);
       }
 
@@ -4691,6 +4769,8 @@ static void final_cleanup (void)
       print_nl("(\\dump is performed only by INITEX)");
   }
 }
+
+static void init_randoms (integer seed);
 
 static int aptex_program (void)
 {
@@ -4912,6 +4992,7 @@ start_of_TEX:
         primitive("ifdefined", if_test, if_def_code);
         primitive("ifcsname", if_test, if_cs_code);
         primitive("iffontchar", if_test, if_font_char_code);
+        primitive("ifincsname", if_test, if_in_csname_code);
         primitive("protected", prefix, 8);
         primitive("numexpr", last_item, eTeX_expr - int_val + int_val);
         primitive("dimexpr", last_item, eTeX_expr - int_val + dimen_val);
@@ -4919,6 +5000,9 @@ start_of_TEX:
         primitive("muexpr", last_item, eTeX_expr - int_val + mu_val);
         primitive("gluestretchorder", last_item, glue_stretch_order_code);
         primitive("glueshrinkorder", last_item, glue_shrink_order_code);
+        primitive("currentspacingmode", last_item, current_spacing_mode_code);
+        primitive("currentxspacingmode", last_item, current_xspacing_mode_code);
+        primitive("currentcjktoken", last_item, current_cjk_token_code);
         primitive("gluestretch", last_item, glue_stretch_code);
         primitive("glueshrink", last_item, glue_shrink_code);
         primitive("mutoglue", last_item, mu_to_glue_code);
@@ -4976,7 +5060,9 @@ start_of_TEX:
       buffer[limit] = end_line_char;
 
     fix_date_and_time();
-    magic_offset = str_start[886] - 9 * ord_noad;
+    random_seed = (microseconds * 1000) + (epochseconds % 1000000);
+    init_randoms(random_seed);
+    magic_offset = str_start[886] - 9 * ord_noad; /* math_spacing = 886 */
 
     if (interaction == batch_mode)
       selector = no_print;
@@ -5121,7 +5207,7 @@ static void sort_avail (void)
 
   p = get_node(010000000000);
   p = rlink(rover);
-  rlink(rover) = empty_flag;
+  rlink(rover) = max_halfword;
   old_rover = rover;
 
   while (p != old_rover)
@@ -5149,7 +5235,7 @@ static void sort_avail (void)
 
   p = rover;
 
-  while (rlink(p) != empty_flag)
+  while (rlink(p) != max_halfword)
   {
     llink(rlink(p)) = p;
     p = rlink(p);
@@ -5187,13 +5273,17 @@ static void fix_date_and_time (void)
 /* sec 0264 */
 static void primitive_ (str_number s, quarterword c, halfword o)
 { 
-  pool_pointer k;
+  pool_pointer k; // {index into |str_pool|}
+  integer prim_val; // {needed to fill |prim_eqtb|}
   int j;
   /* small_number l; */
   int l;
 
   if (s < 256)
+  {
     cur_val = s + single_base;
+    prim_val = prim_lookup(s);
+  }
   else
   {
     k = str_start[s];
@@ -5216,11 +5306,15 @@ static void primitive_ (str_number s, quarterword c, halfword o)
     cur_val = id_lookup(first, l);
     flush_string();
     text(cur_val) = s;
+    prim_val = prim_lookup(s);
   }
 
   eq_level(cur_val) = level_one;
   eq_type(cur_val) = c;
   equiv(cur_val) = o;
+  prim_eq_level(prim_val) = level_one;
+  prim_eq_type(prim_val) = c;
+  prim_equiv(prim_val) = o;
 }
 /* sec 0944 */
 static trie_op_code new_trie_op (small_number d, small_number n, trie_op_code v)
@@ -6039,6 +6133,9 @@ done2:
   print_int(cs_count);
   prints(" multiletter control sequences");
 
+  for (p = 0; p <= prim_size; p++)
+    dump_hh(prim[p]);
+
   // Dump the font information
   dump_int(fmem_ptr);
 
@@ -6264,6 +6361,7 @@ static void init_prim (void)
   primitive("scriptbaselineshiftfactor", assign_int, int_base + script_baseline_shift_factor_code);
   primitive("scriptscriptbaselineshiftfactor", assign_int, int_base + scriptscript_baseline_shift_factor_code);
   primitive("pdfcompresslevel", assign_int, int_base + pdf_compress_level_code);
+  primitive("pdfmajorversion", assign_int, int_base + pdf_major_version_code);
   primitive("pdfminorversion", assign_int, int_base + pdf_minor_version_code);
   primitive("synctex", assign_int, int_base + synctex_code);
   /* sec 0248 */
@@ -6327,6 +6425,7 @@ static void init_prim (void)
   primitive("noalign", no_align, 0);
   primitive("noboundary", no_boundary, 0);
   primitive("noexpand", no_expand, 0);
+  primitive("pdfprimitive", no_expand, 1);
   primitive("nonscript", non_script, 0);
   primitive("omit", omit, 0);
   primitive("parshape", set_shape, par_shape_loc);
@@ -6371,10 +6470,16 @@ static void init_prim (void)
   primitive("inputlineno", last_item, input_line_no_code);
   primitive("badness", last_item, badness_code);
   primitive("shellescape", last_item, shell_escape_code);
+  primitive("pdfshellescape", last_item, shell_escape_code);
+  primitive("ifpdfprimitive", if_test, if_pdfprimitive_code);
   primitive("ptexversion", last_item, ptex_version_code);
   primitive("uptexversion", last_item, uptex_version_code);
   primitive("epTeXversion", last_item, eptex_version_code);
   primitive("ptexminorversion", last_item, ptex_minor_version_code);
+  primitive("pdflastxpos", last_item, pdf_last_x_pos_code);
+  primitive("pdflastypos", last_item, pdf_last_y_pos_code);
+  primitive("pdfelapsedtime", last_item, elapsed_time_code);
+  primitive("pdfrandomseed", last_item, random_seed_code);
   primitive("number", convert, number_code);
   primitive("romannumeral", convert, roman_numeral_code);
   primitive("kansuji", convert, kansuji_code);
@@ -6391,6 +6496,16 @@ static void init_prim (void)
   primitive("pdfstrcmp", convert, ng_strcmp_code);
   primitive("ngbanner", convert, ng_banner_code);
   primitive("ngostype", convert, ng_os_type_code);
+  primitive("pdfcreationdate", convert, pdf_creation_date_code);
+  primitive("pdffilemoddate", convert, pdf_file_mod_date_code);
+  primitive("pdffilesize", convert, pdf_file_size_code);
+  primitive("pdfmdfivesum", convert, pdf_mdfive_sum_code);
+  primitive("pdffiledump", convert, pdf_file_dump_code);
+  primitive("pdfuniformdeviate", convert, pdf_uniform_deviate_code);
+  primitive("pdfnormaldeviate", convert, pdf_normal_deviate_code);
+  primitive("expanded", convert, expanded_code);
+  primitive("Uchar", convert, Uchar_convert_code);
+  primitive("Ucharcat", convert, Ucharcat_convert_code);
   primitive("jobname", convert, job_name_code);
   primitive("if", if_test, if_char_code);
   primitive("ifcat", if_test, if_cat_code);
@@ -6417,6 +6532,8 @@ static void init_prim (void)
   primitive("ifybox", if_test, if_ybox_code);
   primitive("ifdbox", if_test, if_dbox_code);
   primitive("ifmbox", if_test, if_mbox_code);
+  primitive("ifjfont", if_test, if_jfont_code);
+  primitive("iftfont", if_test, if_tfont_code);
   primitive("fi", fi_or_else, fi_code);
   text(frozen_fi) = make_str_string("fi");
   eqtb[frozen_fi] = eqtb[cur_val];
@@ -6573,6 +6690,9 @@ static void init_prim (void)
   primitive("special", extension, special_node);
   primitive("immediate", extension, immediate_code);
   primitive("setlanguage", extension, set_language_code);
+  primitive("pdfsavepos", extension, pdf_save_pos_node);
+  primitive("pdfresettimer", extension, reset_timer_code);
+  primitive("pdfsetrandomseed", extension, set_random_seed_code);
   primitive("kansujichar", set_kansuji_char, 0);
   primitive("autospacing", set_auto_spacing, set_auto_spacing_code);
   primitive("noautospacing", set_auto_spacing, reset_auto_spacing_code);
@@ -6582,6 +6702,7 @@ static void init_prim (void)
   primitive("disablecjktoken", set_enable_cjk_token, set_enable_cjk_token_code);
   primitive("forcecjktoken", set_enable_cjk_token, set_force_cjk_token_code);
   primitive("inhibitglue", inhibit_glue, 0);
+  primitive("disinhibitglue", inhibit_glue, 1);
   primitive("inhibitxspcode", assign_inhibit_xsp_code, inhibit_xsp_code_base);
   primitive("prebreakpenalty", assign_kinsoku, pre_break_penalty_code);
   primitive("postbreakpenalty", assign_kinsoku, post_break_penalty_code);
@@ -6949,6 +7070,90 @@ void print_int (integer n)
   print_the_digs(k);
 }
 
+static pointer prim_lookup(str_number s) //{search the primitives table}
+{
+ integer h; // {hash code}
+ pointer p; // {index in |hash| array}
+ pointer k; // {index in string pool}
+ integer j, l;
+
+  if (s <= biggest_char)
+  {
+    if (s < 0)
+    {
+      p = undefined_primitive;
+      goto found;
+    }
+    else
+      p = (s % prim_prime) + prim_base; // {we start searching here}
+  }
+  else
+  {
+    j = str_start[s];
+
+    if (s == str_ptr)
+      l = cur_length;
+    else
+      l = length(s);
+
+    // @<Compute the primitive code |h|@>;
+    h = str_pool[j];
+
+    for (k = j + 1; k <= j + l - 1; k++)
+    {
+      h = h + h + str_pool[k];
+
+      while (h >= prim_prime)
+        h = h - prim_prime;
+    }
+
+    p = h + prim_base; //{we start searching here; note that |0<=h<prim_prime|}
+  }
+
+  while (true)
+  {
+    if (prim_text(p) > 1 + biggest_char) // { |p| points a multi-letter primitive }
+    {
+      if (length(prim_text(p) - 1) == l)
+        if (str_eq_str(prim_text(p) - 1, s))
+          goto found;
+    }
+    else if (prim_text(p) == 1 + s)
+      goto found; // { |p| points a single-letter primitive }
+
+    if (prim_next(p) == 0)
+    {
+      if (no_new_control_sequence)
+        p = undefined_primitive;
+      else //@<Insert a new primitive after |p|, then make
+        //|p| point to it@>;
+      {
+        if (prim_text(p) > 0)
+        {
+          do {
+            if (prim_is_full)
+              overflow("primitive size", prim_size);
+
+            decr(prim_used);
+          } while (!(prim_text(prim_used) == 0)); // {search for an empty location in |prim|}
+
+          prim_next(p) = prim_used;
+          p = prim_used;
+        }
+
+        prim_text(p) = s + 1;
+      }
+
+      goto found;
+    }
+
+    p = prim_next(p);
+  }
+
+found:
+  return p;
+}
+
 // prints a purported control sequence
 static void print_cs (integer p)
 {
@@ -6985,7 +7190,11 @@ static void print_cs (integer p)
     print_esc("NONEXISTENT.");
   else
   {
-    l = text(p);
+    if ((p >= prim_eqtb_base) && (p < frozen_null_font))
+      l = prim_text(p - prim_eqtb_base) - 1;
+    else
+      l = text(p);
+
     sprint_esc(l);
     j = str_start[l];
     l = str_start[l + 1];
@@ -6998,7 +7207,7 @@ static void print_cs (integer p)
           print_char(' ');
       }
       else
-	print_char(' ');
+        print_char(' ');
     }
     else
       print_char(' ');
@@ -7020,6 +7229,8 @@ static void sprint_cs (pointer p)
       print_esc("endcsname");
     }
   }
+  else if ((p >= prim_eqtb_base) && (p < frozen_null_font))
+    sprint_esc(prim_text(p - prim_eqtb_base) - 1);
   else
     sprint_esc(text(p));
 }
@@ -7216,6 +7427,8 @@ void error (void)
     while (true)
     {
 continu:
+      if (interaction != error_stop_mode)
+        return;
       clear_for_error_prompt();
       prompt_input("? ");
 
@@ -7515,7 +7728,7 @@ boolean init_terminal (void)
     if (!input_ln(term_in, true)) // {this shouldn't happen}
     {
       wterm_cr();
-      puts("! End of file on the terminal... why?");
+      fputs("! End of file on the terminal... why?", stdout);
       return false;
     }
 
@@ -7527,7 +7740,7 @@ boolean init_terminal (void)
     if (loc < last)
       return true;
 
-    puts("Please type the name of your input file.");
+    fputs("Please type the name of your input file.", stdout);
   }
 }
 
@@ -7612,6 +7825,381 @@ static void print_two (integer n)
   n = abs(n) % 100;
   print_char('0' + (n / 10));
   print_char('0' + (n % 10));
+}
+
+// Random numbers.
+
+static inline integer halfp (integer x)
+{
+  return x / 2;
+}
+
+#define _double(f) f = f + f
+
+static integer make_frac (integer p, integer q)
+{
+  integer f; // {the fraction bits, with a leading 1 bit}
+  integer n; // {the integer part of $\vert p/q\vert$}
+  boolean negative; // {should the result be negated?}
+  integer be_careful; // {disables certain compiler optimizations}
+
+  if (p >= 0)
+    negative = false;
+  else
+  {
+    negate(p);
+    negative = true;
+  }
+
+  if (q <= 0)
+  {
+    negate(q);
+    negative = !negative;
+  }
+
+  n = p / q;
+  p = p % q;
+
+  if (n >= 8)
+  {
+    arith_error = true;
+
+    if (negative)
+      return -el_gordo;
+    else
+      return el_gordo;
+  }
+  else
+  {
+    n = (n - 1) * fraction_one;
+
+    // @<Compute $f=\lfloor 2^{28}(1+p/q)+{1\over2}\rfloor$@>;
+    f = 1;
+
+    do {
+      be_careful = p - q;
+      p = be_careful + p;
+
+      if (p >= 0)
+        f = f + f + 1;
+      else
+      {
+        _double(f);
+        p = p + q;
+      }
+    } while (!(f >= fraction_one));
+
+    be_careful = p - q;
+
+    if (be_careful + p >= 0)
+      incr(f);
+
+    if (negative)
+      return -(f + n);
+    else
+      return (f + n);
+  }
+}
+
+static integer take_frac (integer q, integer f)
+{
+  integer p; // {the fraction so far}
+  boolean negative; // {should the result be negated?}
+  integer n; // {additional multiple of $q$}
+  integer be_careful; // {disables certain compiler optimizations}
+
+  // @<Reduce to the case that |f>=0| and |q>0|@>;
+  if (f >= 0)
+    negative = false;
+  else
+  {
+    negate(f);
+    negative = true;
+  }
+
+  if (q < 0)
+  {
+    negate(q);
+    negative = !negative;
+  }
+
+  if (f < fraction_one)
+    n = 0;
+  else
+  {
+    n = f / fraction_one;
+    f = f % fraction_one;
+
+    if (q <= el_gordo / n)
+      n = n * q;
+    else
+    {
+      arith_error = true;
+      n = el_gordo;
+    }
+  }
+
+  f = f + fraction_one;
+  // @<Compute $p=\lfloor qf/2^{28}+{1\over2}\rfloor-q$@>;
+  p = fraction_half; // {that's $2^{27}$; the invariants hold now with $k=28$}
+  if (q < fraction_four) 
+    do {
+      if (odd(f))
+        p = halfp(p + q);
+      else
+        p = halfp(p);
+
+      f = halfp(f);
+    } while (!(f == 1));
+  else
+    do {
+      if (odd(f))
+        p = p + halfp(q - p);
+      else
+        p = halfp(p);
+
+      f = halfp(f);
+    } while (!(f == 1));
+  
+  be_careful = n - el_gordo;
+
+  if (be_careful + p > 0) 
+  {
+    arith_error = true;
+    n = el_gordo - p;
+  }
+
+  if (negative)
+    return -(n + p);
+  else
+    return n + p;
+}
+
+static integer m_log (integer x)
+{
+  integer y, z; // {auxiliary registers}
+  integer k; // {iteration counter}
+
+  if (x <= 0)
+  {
+    print_err("Logarithm of ");
+    print_scaled(x);
+    prints(" has been replaced by 0");
+    help2("Since I don't take logs of non-positive numbers,",
+          "I'm zeroing this one. Proceed, with fingers crossed.");
+    error();
+    return 0;
+  }
+  else
+  {
+    y = 1302456956 + 4 - 100; // {$14\times2^{27}\ln2\approx1302456956.421063$}
+    z = 27595 + 6553600; // {and $2^{16}\times .421063\approx 27595$}
+
+    while (x < fraction_four)
+    {
+      _double(x);
+      y = y - 93032639;
+      z = z - 48782;
+    }
+    // {$2^{27}\ln2\approx 93032639.74436163$
+    // and $2^{16}\times.74436163\approx 48782$}
+    y = y + (z / unity);
+    k = 2;
+
+    while (x > fraction_four + 4)
+    {
+      z = ((x - 1) / two_to_the[k]) + 1; // {$z=\lceil x/2^k\rceil$}
+
+      while (x < fraction_four + z)
+      {
+        z = halfp(z + 1);
+        k = k + 1;
+      }
+
+      y = y + spec_log[k];
+      x = x - z;
+    }
+
+    return y / 8;
+  }
+}
+
+static integer ab_vs_cd (integer a, integer b, integer c, integer d)
+{
+  integer q, r; // {temporary registers}
+
+  //@<Reduce to the case that |a,c>=0|, |b,d>0|@>;
+  if (a < 0) 
+  {
+    negate(a);
+    negate(b);
+  }
+
+  if (c < 0)
+  {
+    negate(c);
+    negate(d);
+  }
+
+  if (d <= 0)
+  {
+    if (b >= 0) 
+      if (((a == 0) || (b == 0)) && ((c == 0) || (d == 0)))
+        return 0;
+      else
+        return 1;
+
+    if (d == 0)
+      if (a == 0)
+        return 0;
+      else
+        return -1;
+    
+    get_microinterval();
+    q = a;
+    a = c; c = q; q = -b; b = -d; d = q;
+  }
+  else if (b <= 0)
+  {
+    if (b < 0)
+      if (a > 0)
+        return -1;
+
+    if (c == 0)
+      return 0;
+    else
+      return -1;
+  }
+
+  for (;;)
+  {
+    q = a / d;
+    r = c / b;
+
+    if (q != r)
+      if (q > r)
+        return 1;
+      else
+        return -1;
+
+    q = a % d;
+    r = c % b;
+
+    if (r == 0)
+      if (q == 0)
+        return 0;
+      else
+        return 1;
+
+    if (q == 0)
+      return -1;
+
+    a = b;
+    b = q;
+    c = d;
+    d = r;
+  } //{now |a>d>0| and |c>b>0|}
+}
+
+#define next_random() \
+do {                  \
+  if (j_random == 0)  \
+    new_randoms();    \
+  else                \
+    decr(j_random);   \
+} while (0)
+
+static void new_randoms()
+{
+  uint32_t k; // {index into |randoms|}
+  integer x; // {accumulator}
+
+  for (k = 0; k <= 23; k++)
+  {
+    x = randoms[k] - randoms[k + 31];
+
+    if (x < 0)
+      x = x + fraction_one;
+
+    randoms[k] = x;
+  }
+
+  for (k = 24; k <= 54; k++)
+  {
+    x = randoms[k] - randoms[k - 24];
+
+    if (x < 0)
+      x = x + fraction_one;
+
+    randoms[k] = x;
+  }
+
+  j_random = 54;
+}
+
+static void init_randoms (integer seed)
+{
+  integer j, jj, k; // {more or less random integers}
+  uint32_t i; // {index into |randoms|}
+
+  j = abs(seed);
+
+  while (j >= fraction_one)
+    j = halfp(j);
+
+  k = 1;
+
+  for (i = 0; i <= 54; i++)
+  {
+    jj = k;
+    k = j-k;
+    j = jj;
+
+    if (k < 0)
+      k = k + fraction_one;
+
+    randoms[(i * 21) % 55] = j;
+  }
+
+  new_randoms();
+  new_randoms();
+  new_randoms(); // {``warm up'' the array}
+}
+
+static integer unif_rand (integer x)
+{
+  integer y; // {trial value}
+
+  next_random();
+  y = take_frac(abs(x), randoms[j_random]);
+
+  if (y == abs(x))
+    return 0;
+  else if (x > 0)
+    return y;
+  else
+    return -y;
+}
+
+static integer norm_rand()
+{
+  integer x, u, l; // {what the book would call $2^{16}X$, $2^{28}U$,
+                   //  and $-2^{24}\ln U$}
+
+  do {
+    do {
+      next_random();
+      x = take_frac(112429, randoms[j_random] - fraction_half);
+      // {$2^{16}\sqrt{8/e}\approx 112428.82793$}
+      next_random();
+      u = randoms[j_random];
+    } while (!(abs(x) < u));
+
+    x = make_frac(x,u);
+    l = 139548960 - m_log(u); // {$2^{24}\cdot12\ln2\approx139548959.6165$}
+  } while (!(ab_vs_cd(1024,l,x,x) >= 0));
+
+  return x;  
 }
 
 // prints a positive integer in hexadecimal form
@@ -8246,8 +8834,8 @@ restart:
       link(q) = empty_flag;
       node_size(q) = t - lo_mem_max;
       lo_mem_max = t;
-      link(lo_mem_max) = 0;
-      info(lo_mem_max) = 0;
+      link(lo_mem_max) = null;
+      info(lo_mem_max) = null;
       rover = q;
       goto restart;
     }
@@ -8256,7 +8844,7 @@ restart:
   /* extend lower memory downwards */
   if (mem_min - (block_size + 1) <= mem_start)
   {
-    mem = realloc_mem (mem_top / 2 + block_size, 0);
+    mem = realloc_mem(mem_top / 2 + block_size, 0);
 
     if (mem == NULL)
       return 0;
@@ -8277,7 +8865,7 @@ found:
     sync_line(r + s) = line;
   }
 
-  link(r) = 0;
+  link(r) = null;
 
 #ifdef STAT
   var_used = var_used + s;
@@ -8316,7 +8904,7 @@ static pointer new_null_box (void)
   depth(p) = 0;
   height(p) = 0;
   shift_amount(p) = 0;
-  list_ptr(p) = 0;
+  list_ptr(p) = null;
   glue_sign(p) = normal;
   glue_order(p) = normal;
   set_glue_ratio_zero(glue_set(p));
@@ -8363,7 +8951,7 @@ static pointer new_lig_item (quarterword c)
 
   p = get_node(small_node_size);
   character(p) = c;
-  lig_ptr(p) = 0;
+  lig_ptr(p) = null;
 
   return p;
 }
@@ -8376,8 +8964,8 @@ static pointer new_disc (void)
   p = get_node(small_node_size);
   type(p) = disc_node;
   replace_count(p) = 0;
-  pre_break(p) = 0;
-  post_break(p) = 0;
+  pre_break(p) = null;
+  post_break(p) = null;
 
   return p;
 }
@@ -8401,7 +8989,7 @@ static pointer new_spec (pointer p)
 
   q = get_node(glue_spec_size);
   mem[q] = mem[p];
-  glue_ref_count(q) = 0;
+  glue_ref_count(q) = null;
   width(q) = width(p);
   stretch(q) = stretch(p);
   shrink(q) = shrink(p);
@@ -8417,7 +9005,7 @@ static pointer new_param_glue (small_number n)
   p = get_node(medium_node_size);
   type(p) = glue_node;
   subtype(p) = n + 1;
-  leader_ptr(p) = 0;
+  leader_ptr(p) = null;
   q = glue_par(n);
   glue_ptr(p) = q;
   incr(glue_ref_count(q));
@@ -8432,7 +9020,7 @@ static pointer new_glue (pointer q)
   p = get_node(medium_node_size);
   type(p) = glue_node;
   subtype(p) = normal;
-  leader_ptr(p) = 0;
+  leader_ptr(p) = null;
   glue_ptr(p) = q;
   incr(glue_ref_count(q));
 
@@ -8445,7 +9033,7 @@ static pointer new_skip_param (small_number n)
 
   temp_ptr = new_spec(glue_par(n));
   p = new_glue(temp_ptr);
-  glue_ref_count(temp_ptr) = 0;
+  glue_ref_count(temp_ptr) = null;
   subtype(p) = n + 1;
 
   return p;
@@ -8492,7 +9080,7 @@ void check_mem (boolean print_locs)
   q = 0;
   clobbered = false;
 
-  while (p != 0)
+  while (p != null)
   {
     if ((p > mem_end) || (p < hi_mem_min))
       clobbered = true;
@@ -8513,7 +9101,7 @@ void check_mem (boolean print_locs)
 
 done1:
   p = rover;
-  q = 0;
+  q = null;
   clobbered = false;
 
   do {
@@ -8678,7 +9266,7 @@ static void short_display (integer p)
 {
   integer n; // {for replacement counts}
 
-  while (p != 0) /* want p != null here ! */
+  while (p != null) /* want "p != null" here ! */
   {
     if (is_char_node(p))
     {
@@ -8745,7 +9333,7 @@ static void short_display (integer p)
 
           while (n > 0)
           {
-            if (link(p) != 0)
+            if (link(p) != null)
               p = link(p);
 
             decr(n);
@@ -8915,7 +9503,7 @@ static void print_subsidiary_data (pointer p, ASCII_code c)
         break;
 
       case sub_mlist:
-        if (info(p) == 0)
+        if (info(p) == null)
         {
           print_ln();
           print_current_string();
@@ -9070,7 +9658,7 @@ void show_node_list (integer p)
 
   n = 0;
 
-  while (p != 0)
+  while (p != null) /* ori. "p > mem_min" */
   {
     print_ln();
     print_current_string(); // {display the nesting history}
@@ -9265,6 +9853,18 @@ void show_node_list (integer p)
               print_int(what_rhm(p));
               print_char(')');
             }
+            break;
+
+          case pdf_save_pos_node:
+            print_esc("pdfsavepos");
+            break;
+
+          case set_random_seed_code:
+            print_esc("pdfsetrandomseed");
+            break;
+
+          case reset_timer_code:
+            print_esc("pdfresettimer");
             break;
 
           default:
@@ -9735,6 +10335,10 @@ void flush_node_list (pointer p)
                 free_node(p, small_node_size);
                 break;
 
+              case pdf_save_pos_node:
+                free_node(p, small_node_size);
+                break;
+
               default:
                 confusion("ext3");
                 break;
@@ -9968,6 +10572,10 @@ static pointer copy_node_list (pointer p)
             }
             break;
 
+          case pdf_save_pos_node:
+            r = get_node(small_node_size);
+            break;
+
           default:
             confusion("ext2");
             break;
@@ -10121,7 +10729,7 @@ static void push_nest (void)
 #endif
   }
 
-  nest[nest_ptr]= cur_list;
+  nest[nest_ptr] = cur_list;
   incr(nest_ptr);
   head = new_null_box();
   tail = head;
@@ -10286,7 +10894,7 @@ static void show_activities (void)
         break;
 
       case 2:
-        if (a.cint != 0)
+        if (a.cint != null)
         {
           prints("this will be denominator of:");
           show_box(a.cint);
@@ -10586,6 +11194,10 @@ static void print_param (integer n)
 
     case pdf_compress_level_code:
       print_esc("pdfcompresslevel");
+      break;
+
+    case pdf_major_version_code:
+      print_esc("pdfmajorversion");
       break;
 
     case pdf_minor_version_code:
@@ -10971,7 +11583,10 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
       break;
 
     case ignore_spaces:
-      print_esc("ignorespaces");
+      if (chr_code == 0)
+        print_esc("ignorespaces");
+      else
+        print_esc("pdfprimitive");
       break;
 
     case insert:
@@ -11020,7 +11635,10 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
       break;
 
     case no_expand:
-      print_esc("noexpand");
+      if (chr_code == 0)
+        print_esc("noexpand");
+      else
+        print_esc("pdfprimitive");
       break;
 
     case non_script:
@@ -11277,6 +11895,22 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
           print_esc("eTeXversion");
           break;
 
+        case pdf_last_x_pos_code:
+          print_esc("pdflastxpos");
+          break;
+
+        case pdf_last_y_pos_code:
+          print_esc("pdflastypos");
+          break;
+
+        case elapsed_time_code:
+          print_esc("pdfelapsedtime");
+          break;
+
+        case random_seed_code:
+          print_esc("pdfrandomseed");
+          break;
+
         case current_group_level_code:
           print_esc("currentgrouplevel");
           break;
@@ -11347,6 +11981,18 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
 
         case glue_shrink_order_code:
           print_esc("glueshrinkorder");
+          break;
+
+        case current_spacing_mode_code:
+          print_esc("currentspacingmode");
+          break;
+
+        case current_xspacing_mode_code:
+          print_esc("currentxspacingmode");
+          break;
+
+        case current_cjk_token_code:
+          print_esc("currentcjktoken");
           break;
 
         case glue_stretch_code:
@@ -11440,6 +12086,46 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
 
         case ng_os_type_code:
           print_esc("ngostype");
+          break;
+
+        case pdf_creation_date_code:
+          print_esc("pdfcreationdate");
+          break;
+
+        case pdf_file_mod_date_code:
+          print_esc("pdffilemoddate");
+          break;
+
+        case pdf_file_size_code:
+          print_esc("pdffilesize");
+          break;
+
+        case pdf_mdfive_sum_code:
+          print_esc("pdfmdfivesum");
+          break;
+
+        case pdf_file_dump_code:
+          print_esc("pdffiledump");
+          break;
+
+        case pdf_uniform_deviate_code:
+          print_esc("pdfuniformdeviate");
+          break;
+
+        case pdf_normal_deviate_code:
+          print_esc("pdfnormaldeviate");
+          break;
+
+        case expanded_code:
+          print_esc("expanded");
+          break;
+
+        case Uchar_convert_code:
+          print_esc("Uchar");
+          break;
+
+        case Ucharcat_convert_code:
+          print_esc("Ucharcat");
           break;
 
         default:
@@ -11551,6 +12237,18 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
             print_esc("ifmbox");
             break;
 
+          case if_pdfprimitive_code:
+            print_esc("ifpdfprimitive");
+            break;
+
+          case if_jfont_code:
+            print_esc("ifjfont");
+            break;
+
+          case if_tfont_code:
+            print_esc("iftfont");
+            break;
+
           case if_def_code:
             print_esc("ifdefined");
             break;
@@ -11561,6 +12259,10 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
 
           case if_font_char_code:
             print_esc("iffontchar");
+            break;
+
+          case if_in_csname_code:
+            print_esc("ifincsname");
             break;
 
           default:
@@ -12198,6 +12900,18 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
           print_esc("setlanguage");
           break;
 
+        case pdf_save_pos_node:
+          print_esc("pdfsavepos");
+          break;
+
+        case reset_timer_code:
+          print_esc("pdfresettimer");
+          break;
+
+        case set_random_seed_code:
+          print_esc("pdfsetrandomseed");
+          break;
+
         default:
           prints("[unknown extension!]");
           break;
@@ -12236,7 +12950,10 @@ void print_cmd_chr (quarterword cmd, halfword chr_code)
       break;
 
     case inhibit_glue:
-      print_esc("inhibitglue");
+      if (cur_chr > 0)
+        print_esc("disinhibitglue");
+      else
+        print_esc("inhibitglue");
       break;
 
     case assign_inhibit_xsp_code:
@@ -12610,7 +13327,7 @@ static void eq_destroy (memory_word w)
       {
         q = equiv_field(w);
 
-        if (q != 0)
+        if (q != null)
           free_node(q, info(q) + info(q) + 1);
       }
       break;
@@ -13936,6 +14653,7 @@ static void insert_relax (void)
 static void expand (void)
 {
   halfword t; // {token that is being ``expanded after''}
+  boolean b; // {keep track of nested csnames}
   pointer p, q, r;  // {for list manipulation}
   integer j;  // {index into |buffer|}
   integer cv_backup;  // {to save the global quantity |cur_val|}
@@ -14025,6 +14743,7 @@ reswitch:
         break;
 
       case no_expand:
+        if (cur_chr == 0)
         {
           save_scanner_status = scanner_status;
           scanner_status = normal;
@@ -14042,12 +14761,49 @@ reswitch:
             loc = p;
           }
         }
+        else
+        {
+          save_scanner_status = scanner_status;
+          scanner_status = normal;
+          get_token();
+          scanner_status = save_scanner_status;
+
+          if (cur_cs < hash_base)
+            cur_cs = prim_lookup(cur_cs - single_base);
+          else
+            cur_cs = prim_lookup(text(cur_cs));
+
+          if (cur_cs != undefined_primitive)
+          {
+            t = prim_eq_type(cur_cs);
+
+            if (t > max_command)
+            {
+              cur_cmd = t;
+              cur_chr = prim_equiv(cur_cs);
+              cur_tok = (cur_cmd * 0400) + cur_chr;
+              cur_cs  = 0;
+              goto reswitch;
+            }
+            else
+            {
+              back_input(); // { now |loc| and |start| point to a one-item list }
+              p = get_avail();
+              info(p) = cs_token_flag + frozen_primitive;
+              link(p) = loc;
+              loc = p;
+              start = p;
+            }
+          }
+        }
         break;
 
       case cs_name:
         {
           r = get_avail();
           p = r;
+          b = is_in_csname;
+          is_in_csname = true;
 
           do {
             get_x_token();
@@ -14066,10 +14822,11 @@ reswitch:
             back_error();
           }
 
+          is_in_csname = b;
           j = first;
           p = link(r);
 
-          while (p != 0)
+          while (p != null)
           {
             if (j >= max_buf_stack)
             {
@@ -14330,10 +15087,12 @@ static boolean scan_keyword (const char * s)
   pointer p;  // {tail of the backup list}
   pointer q;  // {new node being added to the token list via |store_new_token|}
   const char * k; // {index into |str_pool|}
+  pointer save_cur_cs; // {to save |cur_cs|}
 
   p = backup_head;
-  link(p) = 0;
+  link(p) = null;
   k = s;
+  save_cur_cs = cur_cs;
 
   while (*k)
   {
@@ -14351,6 +15110,7 @@ static boolean scan_keyword (const char * s)
       if (p != backup_head)
         back_list(link(backup_head));
 
+      cur_cs = save_cur_cs;
       return false;
     }
   }
@@ -14573,6 +15333,7 @@ static void scan_something_internal (small_number level, boolean negative)
   integer p;
   pointer q, r;
 
+restart:
   m = cur_chr;
 
   switch (cur_cmd)
@@ -14598,6 +15359,25 @@ static void scan_something_internal (small_number level, boolean negative)
 
         if (q != no_entry)
           cur_val = inhibit_xsp_type(q);
+      }
+      break;
+
+    case set_kansuji_char:
+      {
+        scan_int();
+        cur_val_level = int_val;
+
+        if ((cur_val < 0) || (cur_val > 9))
+        {
+          print_err("Invalid KANSUJI number (");
+          print_int(cur_val);
+          print_char(')');
+          help1("I'm skipping this control sequences.");
+          error();
+          return;
+        }
+        else
+          cur_val = fromDVI(kansuji_char(cur_val));
       }
       break;
 
@@ -14973,13 +15753,29 @@ static void scan_something_internal (small_number level, boolean negative)
               {
                 scan_font_ident();
                 q = cur_val;
-                scan_char_num();
 
                 if (font_dir[q] != dir_default)
                 {
-                  if (cur_val >= 256)
+                  scan_int();
+                  
+                  if (cur_val >= 0)
                   {
-                    i = char_info(q, get_jfm_pos(KANJI(cur_val), q));
+                    if (is_char_kanji(cur_val))
+                      cur_val = get_jfm_pos(KANJI(cur_val), q); 
+                    else
+                      cur_val = -1;
+                  }
+                  else
+                  {
+                    cur_val = -(cur_val + 1);
+
+                    if ((font_bc[q] > cur_val) || (font_ec[q] < cur_val))
+                      cur_val = -1;
+                  }
+
+                  if (cur_val != -1)
+                  {
+                    i = char_info(q, cur_val);
 
                     switch (m)
                     {
@@ -15003,31 +15799,36 @@ static void scan_something_internal (small_number level, boolean negative)
                   else
                     cur_val = 0;
                 }
-                else if ((font_bc[q] <= cur_val) && (font_ec[q] >= cur_val))
-                {
-                  i = char_info(q, cur_val);
-
-                  switch (m)
-                  {
-                    case font_char_wd_code:
-                      cur_val = char_width(q, i);
-                      break;
-
-                    case font_char_ht_code:
-                      cur_val = char_height(q, height_depth(i));
-                      break;
-
-                    case font_char_dp_code:
-                      cur_val = char_depth(q, height_depth(i));
-                      break;
-
-                    case font_char_ic_code:
-                      cur_val = char_italic(q, i);
-                      break;
-                  }
-                }
                 else
-                  cur_val = 0;
+                {
+                  scan_char_num();
+
+                  if ((font_bc[q] <= cur_val) && (font_ec[q] >= cur_val))
+                  {
+                    i = char_info(q, cur_val);
+
+                    switch (m)
+                    {
+                      case font_char_wd_code:
+                        cur_val = char_width(q, i);
+                        break;
+
+                      case font_char_ht_code:
+                        cur_val = char_height(q, height_depth(i));
+                        break;
+
+                      case font_char_dp_code:
+                        cur_val = char_depth(q, height_depth(i));
+                        break;
+
+                      case font_char_ic_code:
+                        cur_val = char_italic(q, i);
+                        break;
+                    }
+                  }
+                  else
+                    cur_val = 0;
+                }
               }
               break;
 
@@ -15086,6 +15887,22 @@ static void scan_something_internal (small_number level, boolean negative)
 
             case badness_code:
               cur_val = last_badness;
+              break;
+
+            case pdf_last_x_pos_code:
+              cur_val = pdf_last_x_pos;
+              break;
+
+            case pdf_last_y_pos_code:
+              cur_val = pdf_last_y_pos;
+              break;
+
+            case elapsed_time_code:
+              cur_val = get_microinterval();
+              break;
+
+            case random_seed_code:
+              cur_val = random_seed;
               break;
 
             case shell_escape_code:
@@ -15164,6 +15981,18 @@ static void scan_something_internal (small_number level, boolean negative)
 
                 delete_glue_ref(q);
               }
+              break;
+
+            case current_spacing_mode_code:
+              cur_val = auto_spacing;
+              break;
+
+            case current_xspacing_mode_code:
+              cur_val = auto_xspacing;
+              break;
+
+            case current_cjk_token_code:
+              cur_val = enable_cjk_token;
               break;
           }
 
@@ -15282,6 +16111,35 @@ static void scan_something_internal (small_number level, boolean negative)
               cur_val = last_node_subtype;
               break;
           }
+      }
+      break;
+
+    case ignore_spaces: // {trap unexpandable primitives}
+      if (cur_chr == 1)
+      {
+        get_token();
+
+        if (cur_cs < hash_base)
+          cur_cs = prim_lookup(cur_cs - single_base);
+        else
+          cur_cs = prim_lookup(text(cur_cs));
+
+        if (cur_cs != undefined_primitive)
+        {
+          cur_cmd = prim_eq_type(cur_cs);
+          cur_chr = prim_equiv(cur_cs);
+          cur_cs = prim_eqtb_base + cur_cs;
+          cur_tok = cs_token_flag + cur_cs;
+        }
+        else
+        {
+          cur_cmd = relax;
+          cur_chr = 0;
+          cur_tok = cs_token_flag + frozen_relax;
+          cur_cs = frozen_relax;
+        }
+
+        goto restart;
       }
       break;
 
@@ -15405,6 +16263,8 @@ start_cs:
                 state = skip_blanks;
               else if (cat == spacer)
                 state = skip_blanks;
+              else if (cat == other_kchar)
+                state = mid_kanji;
               else
                 state = mid_line;
 
@@ -15970,6 +16830,7 @@ void scan_int (void)
     }
   } while (!(cur_tok != other_token + '+'));
 
+restart:
   if (cur_tok == alpha_token)
   {
     get_token();
@@ -15997,9 +16858,14 @@ void scan_int (void)
     else if (cur_tok < cs_token_flag + single_base)
       cur_val = cur_tok - cs_token_flag - active_base;
     else
-      cur_val = cur_tok - cs_token_flag - single_base;
+    {
+      if (!(cur_cmd < kanji))
+        cur_cmd = invalid_char;
 
-    if ((cur_val > 255) && ((cur_cmd < kanji) || (cur_cmd > max_char_code)))
+      cur_val = cur_tok - cs_token_flag - single_base;
+    }
+
+    if ((cur_val > 255) && (cur_cmd < kanji))
     {
       print_err("Improper alphabetic or KANJI constant");
       help2("A one-character control sequence belongs after a ` mark.",
@@ -16016,6 +16882,32 @@ void scan_int (void)
     }
 
     skip_mode = true;
+  }
+  else if (cur_tok == cs_token_flag + frozen_primitive)
+  {
+    get_token();
+
+    if (cur_cs < hash_base)
+      cur_cs = prim_lookup(cur_cs - single_base);
+    else
+      cur_cs = prim_lookup(text(cur_cs));
+
+    if (cur_cs != undefined_primitive)
+    {
+      cur_cmd = prim_eq_type(cur_cs);
+      cur_chr = prim_equiv(cur_cs);
+      cur_cs = prim_eqtb_base + cur_cs;
+      cur_tok = cs_token_flag + cur_cs;
+    }
+    else
+    {
+      cur_cmd = relax;
+      cur_chr = 0;
+      cur_tok = cs_token_flag + frozen_relax;
+      cur_cs = frozen_relax;
+    }
+
+    goto restart;
   }
   else if ((cur_cmd >= min_internal) && (cur_cmd <= max_internal))
     scan_something_internal(int_val, false);
@@ -16528,7 +17420,7 @@ reswitch:
 }
 
 // changes the string |str_pool[b..pool_ptr]| to a token list
-static pointer str_toks (pool_pointer b)
+static pointer str_toks_cat (pool_pointer b, uint32_t cat)
 {
   pointer p;
   pointer q;
@@ -16546,9 +17438,11 @@ static pointer str_toks (pool_pointer b)
     t = fromBUFF(str_pool, pool_ptr, k);
     cc = kcat_code(kcatcodekey(t));
 
-    if ((multistrlen(str_pool, pool_ptr, k) > 1) && check_kcat_code(cc))
+    if ((multistrlen(str_pool, pool_ptr, k) > 1) && ((cat >= kanji) || check_kcat_code(cc)))
     {
-      if (cc == not_cjk)
+      if (cat >= kanji)
+        cc = cat;
+      else if (cc == not_cjk)
         cc = other_kchar;
 
       t = t + cc * max_cjk_val;
@@ -16558,10 +17452,14 @@ static pointer str_toks (pool_pointer b)
     {
       t = str_pool[k];
 
-      if (t == ' ')
+      if ((t == ' ') && (cat == 0))
         t = space_token;
-      else
+      else if ((cat == 0) || (cat >= kanji))
         t = other_token + t;
+      else if (cat == active_char)
+        t = cs_token_flag + active_base + t;
+      else
+        t = left_brace_token * cat + t;
     }
 
     fast_store_new_token(t);
@@ -16571,6 +17469,11 @@ static pointer str_toks (pool_pointer b)
   pool_ptr = b;
 
   return p;
+}
+
+static pointer str_toks(pool_pointer b)
+{
+  return str_toks_cat(b, 0);
 }
 
 static pointer the_toks (void)
@@ -16672,6 +17575,164 @@ void ins_the_toks (void)
   ins_list(link(temp_head));
 }
 
+#define save_cur_string()           \
+do {                                \
+  if (str_start[str_ptr] < pool_ptr)\
+    u = make_string();              \
+  else                              \
+    u = 0;                          \
+} while (0)
+
+#define restore_cur_string()  \
+do {                          \
+  if (u != 0)                 \
+    decr(str_ptr);            \
+} while (0)
+
+#define scan_pdf_ext_toks() \
+do {                        \
+  scan_toks(false, true);   \
+} while (0)
+
+
+static char * aptex_find_file (str_number s)
+{
+  char * file_name_kpse = NULL;
+  char * file_name_mbcs = NULL;
+  char * file_name_utf8 = NULL;
+
+  file_name_utf8 = take_str_string(s);
+
+  if (file_name_utf8 != NULL)
+  {
+    file_name_mbcs = utf8_mbcs(file_name_utf8);
+
+    if (file_name_mbcs != NULL)
+    {
+      file_name_kpse = kpse_find_tex((const_string) file_name_mbcs);
+      free(file_name_mbcs);
+    }
+
+    free(file_name_utf8);
+  }
+
+  return file_name_kpse;
+}
+
+static void get_creation_date()
+{
+  size_t date_len;
+  char * date_str;
+
+  date_str = aptex_utils_get_creation_date();
+  date_len = strlen(date_str);
+  str_room(date_len);
+  memcpy(&str_pool[pool_ptr], date_str, date_len);
+  pool_ptr += date_len;
+}
+
+static void get_file_mod_date (str_number s)
+{
+  char * file_name;
+  char * file_mod_date;
+  size_t file_mod_date_len;
+
+  file_name = aptex_find_file(s);
+
+  if (file_name != NULL)
+  {
+    file_mod_date = aptex_utils_get_file_mod_date(file_name);
+
+    if (file_mod_date != NULL)
+    {
+      file_mod_date_len = strlen(file_mod_date);
+      str_room(file_mod_date_len);
+      memcpy(&str_pool[pool_ptr], file_mod_date, file_mod_date_len);
+      pool_ptr += file_mod_date_len;
+    }
+
+    free(file_name);
+  }
+}
+
+static void get_file_size (str_number s)
+{
+  char * file_name;
+  char * file_size_str;
+  size_t file_size_str_len;
+
+  file_name = aptex_find_file(s);
+
+  if (file_name != NULL)
+  {
+    file_size_str = aptex_utils_get_file_size(file_name);
+
+    if (file_size_str != NULL)
+    {
+      file_size_str_len = strlen(file_size_str);
+      str_room(file_size_str_len);
+      memcpy(&str_pool[pool_ptr], file_size_str, file_size_str_len);
+      pool_ptr += file_size_str_len;
+      free(file_size_str);
+    }
+
+    free(file_name);
+  }
+}
+
+static void get_md5_sum (str_number s, boolean f)
+{
+  char * file_name;
+  char * file_md5_sum;
+  size_t file_md5_sum_len;
+
+  if (f == 1)
+    file_name = aptex_find_file(s);
+  else
+    file_name = take_str_string(s);
+
+  if (file_name != NULL)
+  {
+    file_md5_sum = aptex_utils_get_md5_sum(file_name, f);
+
+    if (file_md5_sum != NULL)
+    {
+      file_md5_sum_len = strlen(file_md5_sum);
+      str_room(file_md5_sum_len);
+      memcpy(&str_pool[pool_ptr], file_md5_sum, file_md5_sum_len);
+      pool_ptr += file_md5_sum_len;
+      free(file_md5_sum);
+    }
+
+    free(file_name);
+  }
+}
+
+static void get_file_dump (str_number s, integer i, integer j)
+{
+  char * file_name;
+  char * file_dump;
+  size_t file_dump_len;
+
+  file_name = aptex_find_file(s);
+
+  if (file_name != NULL)
+  {
+    file_dump = aptex_utils_get_file_dump(file_name, i, j);
+
+    if (file_dump != NULL)
+    {
+      file_dump_len = strlen(file_dump);
+      str_room(file_dump_len);
+      memcpy(&str_pool[pool_ptr], file_dump, file_dump_len);
+      pool_ptr += file_dump_len;
+      free(file_dump);
+    }
+
+    free(file_name);
+  }
+}
+
 void conv_toks (void)
 {
   char old_setting;
@@ -16679,9 +17740,16 @@ void conv_toks (void)
   char c;
   small_number save_scanner_status;
   pointer save_def_ref;
+  pointer save_warning_index;
+  boolean boolvar;
   str_number u;
+  str_number s;
+  integer i;
+  integer j;
+  uint32_t cat;
   pool_pointer b;
 
+  cat = 0;
   c = cur_chr;
   KANJI(cx) = 0;
 
@@ -16729,18 +17797,11 @@ void conv_toks (void)
       {
         save_scanner_status = scanner_status;
         save_def_ref = def_ref;
-
-        if (str_start[str_ptr] < pool_ptr)
-          u = make_string();
-        else
-          u = 0;
-
+        save_cur_string();
         compare_strings();
         def_ref = save_def_ref;
         scanner_status = save_scanner_status;
-
-        if (u != 0)
-          decr(str_ptr);
+        restore_cur_string();
       }
       break;
 
@@ -16750,6 +17811,240 @@ void conv_toks (void)
 
     case ng_os_type_code:
       do_nothing();
+      break;
+
+    case pdf_creation_date_code:
+      {
+        b = pool_ptr;
+        get_creation_date();
+        link(garbage) = str_toks(b);
+        ins_list(link(temp_head));
+        return;
+      }
+      break;
+
+    case pdf_file_mod_date_code:
+      {
+        save_scanner_status = scanner_status;
+        save_warning_index = warning_index;
+        save_def_ref = def_ref;
+        save_cur_string();
+        scan_pdf_ext_toks();
+        s = tokens_to_string(def_ref);
+        delete_token_ref(def_ref);
+        def_ref = save_def_ref;
+        warning_index = save_warning_index;
+        scanner_status = save_scanner_status;
+        b = pool_ptr;
+        get_file_mod_date(s);
+        link(garbage) = str_toks(b);
+        flush_str(s);
+        ins_list(link(temp_head));
+        restore_cur_string();
+        return;
+      }
+      break;
+
+    case pdf_file_size_code:
+      {
+        save_scanner_status = scanner_status;
+        save_warning_index = warning_index;
+        save_def_ref = def_ref;
+        save_cur_string();
+        scan_pdf_ext_toks();
+        s = tokens_to_string(def_ref);
+        delete_token_ref(def_ref);
+        def_ref = save_def_ref;
+        warning_index = save_warning_index;
+        scanner_status = save_scanner_status;
+        b = pool_ptr;
+        get_file_size(s);
+        link(garbage) = str_toks(b);
+        flush_str(s);
+        ins_list(link(temp_head));
+        restore_cur_string();
+        return;
+      }
+      break;
+
+    case pdf_mdfive_sum_code:
+      {
+        save_scanner_status = scanner_status;
+        save_warning_index = warning_index;
+        save_def_ref = def_ref;
+        save_cur_string();
+        boolvar = scan_keyword("file");
+        scan_pdf_ext_toks();
+
+        if (boolvar)
+          s = tokens_to_string(def_ref);
+        else
+        {
+          is_print_utf8 = true;
+          s = tokens_to_string(def_ref);
+          is_print_utf8 = false;
+        }
+
+        delete_token_ref(def_ref);
+        def_ref = save_def_ref;
+        warning_index = save_warning_index;
+        scanner_status = save_scanner_status;
+        b = pool_ptr;
+        get_md5_sum(s, boolvar);
+        link(garbage) = str_toks(b);
+        flush_str(s);
+        ins_list(link(temp_head));
+        restore_cur_string();
+        return;
+      }
+      break;
+
+    case pdf_file_dump_code:
+      {
+        save_scanner_status = scanner_status;
+        save_warning_index = warning_index;
+        save_def_ref = def_ref;
+        save_cur_string();
+
+        // {scan offset}
+        cur_val = 0;
+
+        if (scan_keyword("offset"))
+        {
+          scan_int();
+
+          if (cur_val < 0)
+          {
+            print_err("Bad file offset");
+            help2("A file offset must be between 0 and 2^{31}-1,", "I changed this one to zero.");
+            int_error(cur_val);
+            cur_val = 0;
+          }
+        }
+
+        i = cur_val;
+
+        // {scan length}
+        cur_val = 0;
+
+        if (scan_keyword("length"))
+        {
+          scan_int();
+
+          if (cur_val < 0)
+          {
+            print_err("Bad dump length");
+            help2("A dump length must be between 0 and 2^{31}-1,", "I changed this one to zero.");
+            int_error(cur_val);
+            cur_val = 0;
+          }
+        }
+
+        j = cur_val;
+
+        //{scan file name}
+        scan_pdf_ext_toks();
+        s = tokens_to_string(def_ref);
+        delete_token_ref(def_ref);
+        def_ref = save_def_ref;
+        warning_index = save_warning_index;
+        scanner_status = save_scanner_status;
+        b = pool_ptr;
+        get_file_dump(s, i, j);
+        link(garbage) = str_toks(b);
+        flush_str(s);
+        ins_list(link(temp_head));
+        restore_cur_string();
+        return;
+      }
+      break;
+
+    case pdf_uniform_deviate_code:
+      scan_int();
+      break;
+
+    case pdf_normal_deviate_code:
+      do_nothing();
+      break;
+
+    case expanded_code:
+      {
+        save_scanner_status = scanner_status;
+        save_warning_index = warning_index;
+        save_def_ref = def_ref;
+        save_cur_string();
+        scan_pdf_ext_toks();
+        warning_index = save_warning_index;
+        scanner_status = save_scanner_status;
+        ins_list(link(def_ref));
+        def_ref = save_def_ref;
+        restore_cur_string();
+        return;
+      }
+      break;
+
+    case Uchar_convert_code:
+      {
+        scan_char_num();
+
+        if (!is_char_ascii(cur_val))
+          if (kcat_code(kcatcodekey(cur_val)) == not_cjk)
+            cat = other_kchar;
+      }
+      break;
+
+    case Ucharcat_convert_code:
+      {
+        scan_char_num();
+        i = cur_val;
+        scan_int();
+
+        if (i <= 0x7F) //{ no |wchar_token| }
+        {
+          if (illegal_Ucharcat_ascii_catcode(cur_val))
+          {
+            print_err("Invalid code (");
+            print_int(cur_val);
+            prints("), should be in the ranges 1..4, 6..8, 10..13");
+            help1("I'm going to use 12 instead of that illegal code value.");
+            error();
+            cat = 12;
+          }
+          else
+            cat = cur_val;
+        }
+        else if (i <= 0xFF)
+        {
+          if ((illegal_Ucharcat_ascii_catcode(cur_val))
+            && (illegal_Ucharcat_wchar_catcode(cur_val)))
+          {
+            print_err("Invalid code (");
+            print_int(cur_val);
+            prints("), should be in the ranges 1..4, 6..8, 10..13, 16..19");
+            help1("I'm going to use 12 instead of that illegal code value.");
+            error();
+            cat = 12;
+          }
+          else
+            cat = cur_val;
+        }
+        else //{ |wchar_token| only }
+        {
+          if (illegal_Ucharcat_wchar_catcode(cur_val))
+          {
+            print_err("Invalid code (");
+            print_int(cur_val);
+            prints("), should be in the ranges 16..19");
+            help1("I'm going to use 18 instead of that illegal code value.");
+            error();
+            cat = other_kchar;
+          }
+          else
+            cat = cur_val;
+        }
+
+        cur_val = i;
+      }
       break;
 
     case job_name_code:
@@ -16846,13 +18141,35 @@ void conv_toks (void)
       prints(dist);
       break;
 
+    case pdf_uniform_deviate_code:
+      print_int(unif_rand(cur_val));
+      break;
+
+    case pdf_normal_deviate_code:
+      print_int(norm_rand());
+      break;
+
+    case Uchar_convert_code:
+      if (is_char_ascii(cur_val))
+        print_char(cur_val);
+      else
+        print_kanji(cur_val);
+      break;
+
+    case Ucharcat_convert_code:
+      if (cat < kanji)
+        print_char(cur_val);
+      else
+        print_kanji(cur_val);
+      break;
+
     case job_name_code:
       print(job_name);
       break;
   }
 
   selector = old_setting;
-  link(garbage) = str_toks(b);
+  link(garbage) = str_toks_cat(b, cat);
   ins_list(link(temp_head));
 }
 
@@ -17140,13 +18457,27 @@ void read_toks (integer n, pointer r, halfword j)
     {
       while (loc <= limit)  // {current line not yet finished}
       {
-        cur_chr = buffer[loc];
-        incr(loc);
+        cur_chr = fromBUFF(buffer, limit + 1, loc);
+        cur_tok = kcat_code(kcatcodekey(cur_chr));
 
-        if (cur_chr == ' ')
-          cur_tok = space_token;
+        if ((multistrlen(buffer, limit + 1, loc) > 1) && check_kcat_code(cur_tok))
+        {
+          if (cur_tok == not_cjk)
+            cur_tok = other_kchar;
+
+          cur_tok = cur_chr + cur_tok * max_cjk_val;
+          loc = loc + multistrlen(buffer, limit + 1, loc);
+        }
         else
-          cur_tok = cur_chr + other_token;
+        {
+          cur_chr = buffer[loc];
+          incr(loc);
+
+          if (cur_chr == ' ')
+            cur_tok = space_token;
+          else
+            cur_tok = cur_chr + other_token;
+        }
 
         store_new_token(cur_tok);
       }
@@ -17245,7 +18576,8 @@ static void change_if_limit (small_number l, pointer p)
 
 void conditional (void)
 {
-  boolean b;  // {is the condition true?}
+  boolean b; // {is the condition true?}
+  boolean e; // {keep track of nested csnames}
   char r; // {relation to be evaluated}
   integer m, n; // {to be tested against the second operand}
   pointer p, q; // {for traversing token lists in \.{\\ifx} tests}
@@ -17291,7 +18623,7 @@ void conditional (void)
         else if ((cur_cmd > active_char) || (cur_chr > 255))
         {
           m = relax;
-          n = 256;
+          n = max_cjk_val;
         }
         else
         {
@@ -17308,7 +18640,7 @@ void conditional (void)
         else if ((cur_cmd > active_char) || (cur_chr > 255))
         {
           cur_cmd = relax;
-          cur_chr = 256;
+          cur_chr = max_cjk_val;
         }
 
         if (this_if == if_char_code)
@@ -17440,6 +18772,37 @@ void conditional (void)
       }
       break;
 
+    case if_pdfprimitive_code:
+      {
+        save_scanner_status = scanner_status;
+        scanner_status = normal;
+        get_next();
+        scanner_status = save_scanner_status;
+
+        if (cur_cs < hash_base)
+          m = prim_lookup(cur_cs - single_base);
+        else
+          m = prim_lookup(text(cur_cs));
+
+        b = ((cur_cmd != undefined_cs) &&
+             (m != undefined_primitive) &&
+             (cur_cmd == prim_eq_type(m)) &&
+             (cur_chr == prim_equiv(m)));
+      }
+      break;
+
+    case if_jfont_code:
+    case if_tfont_code:
+      {
+        scan_font_ident();
+
+        if (this_if == if_jfont_code)
+          b = (font_dir[cur_val] == dir_yoko);
+        else if (this_if == if_tfont_code)
+          b = (font_dir[cur_val] == dir_tate);
+      }
+      break;
+
     case ifx_code:
       {
         save_scanner_status = scanner_status;
@@ -17514,6 +18877,8 @@ void conditional (void)
       {
         n = get_avail();
         p = n;
+        e = is_in_csname;
+        is_in_csname = true;
 
         do {
           get_x_token();
@@ -17594,19 +18959,40 @@ void conditional (void)
 
         flush_list(n);
         b = (eq_type(cur_cs) != undefined_cs);
+        is_in_csname = e;
       }
+      break;
+
+    case if_in_csname_code:
+      b = is_in_csname;
       break;
 
     case if_font_char_code:
       {
         scan_font_ident();
         n = cur_val;
-        scan_char_num();
 
-        if ((font_bc[n] <= cur_val) && (font_ec[n] >= cur_val))
-          b = char_exists(char_info(n, cur_val));
+        if (font_dir[n] != dir_default)
+        {
+          scan_int();
+
+          if (cur_val >= 0)
+            b = is_char_kanji(cur_val);
+          else
+          {
+            cur_val = -(cur_val + 1);
+            b = (font_bc[n] <= cur_val) && (font_ec[n] >= cur_val);
+          }
+        }
         else
-          b = false;
+        {
+          scan_char_num();
+
+          if ((font_bc[n] <= cur_val) && (font_ec[n] >= cur_val))
+            b = char_exists(char_info(n, cur_val));
+          else
+            b = false;
+        }
       }
       break;
 
@@ -17730,7 +19116,7 @@ static void begin_name (void)
 
 static boolean more_name (ASCII_code c)
 {
-  if (!quoted_file_name && c == ' ')
+  if (stop_at_space && !quoted_file_name && c == ' ')
     return false;
   else if (quoted_file_name && c == '"')
   {
@@ -17895,61 +19281,124 @@ str_number w_make_name_string (word_file f)
   return make_name_string();
 }
 
+static void scan_file_name_braced(void);
+
 static void scan_file_name (void)
 {
-  name_in_progress = true;
-  begin_name();
+  pointer save_warning_index;
+
+  save_warning_index = warning_index;
+  warning_index = cur_cs; // {store |cur_cs| here to remember until later}
 
   do {
-    get_x_token(); 
-  } while (!(cur_cmd != spacer));
+    get_x_token();
+  } while (!((cur_cmd != spacer) && (cur_cmd != relax)));
 
-  quoted_file_name = false;
+  back_input(); // {return the last token to be read by either code path}
 
-  if (aptex_env.flag_allow_quoted)
+  if (cur_cmd == left_brace)
+    scan_file_name_braced();
+  else
   {
-    if (cur_chr == '"')
+    name_in_progress = true;
+    begin_name();
+
+    do {
+      get_x_token(); 
+    } while (!(cur_cmd != spacer));
+
+    quoted_file_name = false;
+
+    if (aptex_env.flag_allow_quoted)
     {
-      quoted_file_name = true;
+      if (cur_chr == '"')
+      {
+        quoted_file_name = true;
+        get_x_token();
+      }
+    }
+
+    skip_mode = false;
+
+    while (true)
+    {
+      if ((cur_cmd >= kanji) && (cur_cmd <= hangul))
+      {
+        str_room(4);
+        cur_chr = toBUFF(cur_chr);
+
+        if (BYTE1(cur_chr) != 0)
+          append_char(BYTE1(cur_chr));
+
+        if (BYTE2(cur_chr) != 0)
+          append_char(BYTE2(cur_chr));
+
+        if (BYTE3(cur_chr) != 0)
+          append_char(BYTE3(cur_chr));
+
+        append_char(BYTE4(cur_chr));
+      }
+      else if ((cur_cmd > other_char) || (cur_chr > 255)) 
+      {
+        back_input();
+        goto done; 
+      }
+      else if (((cur_chr == ' ') && (state != token_list) && (loc > limit)) || !more_name(cur_chr))
+        goto done;
+
       get_x_token();
     }
-  }
-
-  skip_mode = false;
-
-  while (true)
-  {
-    if ((cur_cmd >= kanji) && (cur_cmd <= hangul))
-    {
-      str_room(4);
-      cur_chr = toBUFF(cur_chr);
-
-      if (BYTE1(cur_chr) != 0)
-        append_char(BYTE1(cur_chr));
-
-      if (BYTE2(cur_chr) != 0)
-        append_char(BYTE2(cur_chr));
-
-      if (BYTE3(cur_chr) != 0)
-        append_char(BYTE3(cur_chr));
-
-      append_char(BYTE4(cur_chr));
-    }
-    else if ((cur_cmd > other_char) || (cur_chr > 255)) 
-    {
-      back_input();
-      goto done; 
-    }
-    else if (((cur_chr == ' ') && (state != token_list) && (loc > limit)) || !more_name(cur_chr))
-      goto done;
-
-    get_x_token();
   }
 
 done:
   end_name();
   name_in_progress = false;
   skip_mode = true;
+  warning_index = save_warning_index; // {restore |warning_index|}
+}
+
+static void scan_file_name_braced(void)
+{
+  small_number save_scanner_status; // {|scanner_status| upon entry}
+  pointer save_def_ref; // {|def_ref| upon entry, important if inside `\.{\\message}}
+  pointer save_cur_cs;
+  str_number s; // {temp string}
+  pointer p; // {temp pointer}
+  integer i; // {loop tally}
+  boolean save_stop_at_space; // {this should be in tex.ch}
+  boolean dummy; //{Initialising}
+
+  save_scanner_status = scanner_status; // {|scan_toks| sets |scanner_status| to |absorbing|}
+  save_def_ref = def_ref; // {|scan_toks| uses |def_ref| to point to the token list just read}
+  save_cur_cs = cur_cs; // {we set |cur_cs| back a few tokens to use in runaway errors}
+  //  {Scanning a token list}
+  cur_cs = warning_index; // {for possible runaway error}
+  // {mimick |call_func| from pdfTeX}
+
+  if (scan_toks(false, true) != 0)
+    do_nothing(); // {actually do the scanning}
+ 
+  // {s := tokens_to_string(def_ref);}
+  old_setting = selector;
+  selector = new_string;
+  show_token_list(link(def_ref), null, pool_size - pool_ptr);
+  selector = old_setting;
+  s = make_string();
+  // {turns the token list read in a string to input}
+  //  {Restoring some variables}
+  delete_token_ref(def_ref); // {remove the token list from memory}
+  def_ref = save_def_ref; // {and restore |def_ref|}
+  cur_cs = save_cur_cs; // {restore |cur_cs|}
+  scanner_status = save_scanner_status; // {restore |scanner_status|}
+  //  {Passing the read string to the input machinery}
+  save_stop_at_space = stop_at_space; // {save |stop_at_space|}
+  stop_at_space = false; // {set |stop_at_space| to false to allow spaces in file names}
+  begin_name();
+
+  for (i = str_start[s]; i <= str_start[s + 1] - 1; i++)
+    dummy = more_name(str_pool[i]); // {add each read character to the current file name}
+
+  stop_at_space = save_stop_at_space; // {restore |stop_at_space|}
 }
 
 void pack_job_name_(str_number s)
@@ -18652,8 +20101,15 @@ static void char_warning (internal_font_number f, eight_bits c)
     if (eTeX_ex && (tracing_lost_chars > 1))
       tracing_online = 1;
 
-    begin_diagnostic();
-    print_nl("Missing character: there is no ");
+    if (tracing_lost_chars > 2)
+    {
+      print_err("Missing character: There is no ");
+    }
+    else
+    {
+      begin_diagnostic();
+      print_nl("Missing character: there is no ");
+    }
 
     if ((c < ' ') || (c > '~'))
     {
@@ -18673,11 +20129,28 @@ static void char_warning (internal_font_number f, eight_bits c)
     else
       print(c);
 
+    if (tracing_lost_chars > 2)
+    {
+      prints(" (");
+      print_hex(c);
+      prints(")");
+    }
+
     prints(" in font ");
     slow_print(font_name[f]);
-    print_char('!');
-    end_diagnostic(false);
+
+    if (tracing_lost_chars < 3)
+      print_char('!');
+
     tracing_online = old_setting;
+
+    if (tracing_lost_chars > 2)
+    {
+      help0();
+      error();
+    }
+    else
+      end_diagnostic(false);
   }
 }
 
@@ -19008,22 +20481,25 @@ struct pdf_enc_setting {
 struct pdf_obj_setting {
     int         enable_objstm;
     int         enable_predictor;
+    int         compression_level;
 };
 
 struct pdf_setting
 {
+    int    ver_major, ver_minor;
     double media_width, media_height;
     double annot_grow_amount;
     int    outline_open_depth;
     int    check_gotos;
+    int    enable_manual_thumb;
     int    enable_encrypt;
     struct pdf_enc_setting encrypt;
     struct pdf_dev_setting device;
     struct pdf_obj_setting object;
 };
 
-extern void pdf_open_document (const char *filename, const char **ids,
-                               struct pdf_setting settings);
+extern void pdf_open_document(const char *filename, const char * creator, 
+  const unsigned char * id1, const unsigned char * id2, struct pdf_setting settings);
 extern void pdf_close_document(void);
 extern void pdf_doc_begin_page(double scale, double x_origin, double y_origin);
 extern void pdf_doc_end_page(void);
@@ -19033,8 +20509,6 @@ typedef struct pdf_rect {
 extern void pdf_doc_set_mediabox(unsigned page_no, const pdf_rect *mediabox);
 
 /* from "dvipdfm-x/pdfobj.h" */
-extern void pdf_set_version(unsigned version);
-extern void pdf_set_compression(int level);
 extern long pdf_output_stats(void);
 
 /* from "dvipdfm-x/pdfdev.h" */
@@ -19045,12 +20519,17 @@ extern void pdf_dev_set_dirmode(int dir_mode);
 extern void pdf_dev_begin_actualtext(uint16_t * unicodes, int len);
 extern void pdf_dev_end_actualtext(void);
 
+/* from "dvipdfm-x/pdflimits.h" */
+#define PDF_VERSION_MIN 13
+#define PDF_VERSION_MAX 20
+
 /* from "dvipdfm-x/specials.h" */
 extern int spc_exec_at_begin_document(void);
 extern void spc_exec_at_end_document(void);
 extern int spc_exec_at_begin_page(void);
 extern int spc_exec_at_end_page(void);
-extern int spc_exec_special(const char *buffer, long size, double x_user, double y_user, double dpx_mag);
+extern int spc_exec_special(const char *buffer, long size,
+ double x_user, double y_user, double dpx_mag, int * is_drawable, pdf_rect *rect);
 
 /* from "dvipdfm-x/dvi.c" */
 extern int dvi_locate_font (const char *tfm_name, spt_t ptsize);
@@ -19062,6 +20541,32 @@ extern void ng_set(int32_t ch, int ng_font_id, int32_t h, int32_t v);
 extern void ng_gid(uint16_t gid, int ng_font_id, int32_t h, int32_t v);
 extern void ng_layer(uint16_t gid, int ng_font_id, int32_t h, int32_t v, uint8_t r, uint8_t g, uint8_t b);
 extern void spc_moveto(int32_t, int32_t);
+
+/* dvipdfm-x/dvipdfmx.c */
+extern int dpx_util_format_asn_date (char *, int);
+typedef struct {
+  uint32_t A, B, C, D;
+  size_t nblocks;
+  unsigned char buf[64];
+  int count;
+} MD5_CONTEXT;
+extern void MD5_init(MD5_CONTEXT *);
+extern void MD5_write(MD5_CONTEXT *, const unsigned char *, unsigned int);
+extern void MD5_final(unsigned char *, MD5_CONTEXT *);
+
+static void dpx_compute_id_string (unsigned char * id, const char * producer, const char * dvi_file_name, const char * pdf_file_name)
+{
+  char datestr[32];
+  MD5_CONTEXT md5;
+
+  MD5_init(&md5);
+  dpx_util_format_asn_date(datestr, 0);
+  MD5_write(&md5, (const unsigned char *) datestr, strlen(datestr));
+  MD5_write(&md5, (const unsigned char *) producer, strlen(producer));
+  MD5_write(&md5, (const unsigned char *) dvi_file_name, strlen(dvi_file_name));
+  MD5_write(&md5, (const unsigned char *) pdf_file_name, strlen(pdf_file_name));
+  MD5_final(id, &md5);
+}
 
 static const double sp2bp = 0.000015202;
 static int     font_id[65536];
@@ -19233,7 +20738,7 @@ static void pdf_locate_font (internal_font_number f)
       font_id[f] = dvi_locate_font(lfont_name, font_size[f]);
   }
   else
-    font_id[f] = dvi_locate_font(lfont_name, font_size[f]);
+	  font_id[f] = dvi_locate_font(lfont_name, font_size[f]);
 
   free(lfont_name);
   free(lfont_area);
@@ -19541,6 +21046,21 @@ static void ship_out (pointer p)
   dvi_f = null_font;
   dvi_dir = dir_yoko;
   cur_dir_hv = dvi_dir;
+
+  if (pdf_page_height != 0)
+    cur_page_height = pdf_page_height;
+  else if ((box_dir(p) == dir_tate) || (box_dir(p) == dir_dtou))
+    cur_page_height = width(p) + 2 * v_offset + 2 * 4736286;
+  else
+    cur_page_height = height(p) + depth(p) + 2 * v_offset + 2 * 4736286;
+
+  if (pdf_page_width != 0)
+    cur_page_width = pdf_page_width;
+  else if ((box_dir(p) == dir_tate) || (box_dir(p) == dir_dtou))
+    cur_page_width = height(p) + depth(p) + 2 * h_offset + 2 * 4736286;
+  else
+    cur_page_width = width(p) + 2 * h_offset + 2 * 4736286;
+
   ensure_dvi_open();
 
   if (total_pages == 0)
@@ -19573,23 +21093,32 @@ static void ship_out (pointer p)
 #ifndef APTEX_DVI_ONLY
     {
       struct pdf_setting aptex_pdf_setting;
-      const char * aptex_pdf_ids[4] = {"Asiatic pTeX 2018", NULL, NULL, "Asiatic pTeX 2018"};
+      char * aptex_producer = "Asiatic pTeX 2020";
+      int aptex_pdf_version;
+      unsigned char aptex_id1[16], aptex_id2[16];
 
       output_dvi_name = take_str_string(output_file_name);
       output_pdf_name = take_str_string(output_file_name);
       memcpy(output_pdf_name + length(output_file_name) - 4, ".pdf", 4);
-      aptex_pdf_ids[1] = output_dvi_name;
-      aptex_pdf_ids[2] = output_pdf_name;
+      dpx_compute_id_string(aptex_id1, aptex_producer, output_dvi_name, output_pdf_name);
+      memcpy(aptex_id2, aptex_id1, 16);
 
-      if ((pdf_minor_version < 0) || (pdf_minor_version > 7))
-        pdf_set_version(15);
+      aptex_pdf_version = 10 * pdf_major_version + pdf_minor_version;
+      if ((aptex_pdf_version < PDF_VERSION_MIN) || (aptex_pdf_version > PDF_VERSION_MAX))
+      {
+        aptex_pdf_setting.ver_major = 1;
+        aptex_pdf_setting.ver_minor = 5;
+      }
       else
-        pdf_set_version(10 + pdf_minor_version);
+      {
+        aptex_pdf_setting.ver_major = pdf_major_version;
+        aptex_pdf_setting.ver_minor = pdf_minor_version;
+      }
 
       if ((pdf_compress_level < 0) || (pdf_compress_level > 9))
-        pdf_set_compression(9);
+        aptex_pdf_setting.object.compression_level = 9;
       else
-        pdf_set_compression(pdf_compress_level);
+        aptex_pdf_setting.object.compression_level = pdf_compress_level;
 
       pdf_init_fontmaps();
 
@@ -19626,13 +21155,14 @@ static void ship_out (pointer p)
       aptex_pdf_setting.annot_grow_amount = 0.0;
       aptex_pdf_setting.outline_open_depth = 0;
       aptex_pdf_setting.check_gotos = !(1 << 4);
+      aptex_pdf_setting.enable_manual_thumb = 0;
       aptex_pdf_setting.enable_encrypt = 0;
       aptex_pdf_setting.object.enable_objstm = 1;
       aptex_pdf_setting.object.enable_predictor = 1;
       aptex_pdf_setting.device.dvi2pts = sp2bp;
       aptex_pdf_setting.device.precision = 3;
       aptex_pdf_setting.device.ignore_colors = 0;
-      pdf_open_document(utf8_mbcs(output_pdf_name), aptex_pdf_ids, aptex_pdf_setting);
+      pdf_open_document(utf8_mbcs(output_pdf_name), aptex_producer, aptex_id1, aptex_id2, aptex_pdf_setting);
       aptex_dpx_init_page(pdf_page_width, pdf_page_height);
       spc_exec_at_begin_document();
       FT_Init_FreeType(&font_ftlib);
@@ -19926,7 +21456,7 @@ void hlist_out (void)
   left_edge = cur_h;
   // @<Start hlist {\sl Sync\TeX} information record@>
   synctex_hlist(this_box);
-
+ 
   /*
     @<Output node |p| for |hlist_out| and move to the next node,
     maintaining the condition |cur_v=base_line|@>
@@ -19941,7 +21471,7 @@ reswitch:
 
     do {
       f = font(p);
-      c = character(p);
+	  c = character(p);
 
       // @<Change font |dvi_f| to |f|@>
       if (f != dvi_f)
@@ -19950,7 +21480,7 @@ reswitch:
         {
           dvi_font_def(f);
 #ifndef APTEX_DVI_ONLY
-          pdf_locate_font(f);
+		  pdf_locate_font(f);
 #endif
           font_used[f] = true;
         }
@@ -20858,10 +22388,15 @@ static void special_out (pointer p)
         break;
     }
 
-    graphics_mode();
-    spc_moveto(cur_h * sp2bp / 1.5202, cur_v * sp2bp / 1.5202);
-    spc_exec_special(spc_str, cur_length,
-      spc_h * sp2bp, spc_v * sp2bp, mag / 1000.0);
+    {
+      int is_drawable = 0;
+      pdf_rect rect = {0.0, 0.0, 0.0, 0.0};
+
+      graphics_mode();
+      spc_moveto(cur_h * sp2bp / 1.5202, cur_v * sp2bp / 1.5202);
+      spc_exec_special(spc_str, cur_length,
+        spc_h * sp2bp, spc_v * sp2bp, mag / 1000.0, &is_drawable, &rect);
+    }
   }
 #endif
   pool_ptr = str_start[str_ptr];
@@ -21043,6 +22578,37 @@ void out_what (pointer p)
 
     case language_node:
       do_nothing();
+      break;
+
+    case pdf_save_pos_node:
+	  {
+        switch (dvi_dir)
+        {
+          case dir_yoko:
+            {
+              pdf_last_x_pos = cur_h;
+              pdf_last_y_pos = cur_v;
+            }
+            break;
+
+          case dir_tate:
+            {
+              pdf_last_x_pos = -cur_v;
+              pdf_last_y_pos = cur_h;
+            }
+            break;
+
+          case dir_dtou:
+            {
+              pdf_last_x_pos = cur_v;
+              pdf_last_y_pos = -cur_h;
+            }
+            break;
+        }
+
+        pdf_last_x_pos = pdf_last_x_pos + 4736286;
+        pdf_last_y_pos = cur_page_height - pdf_last_y_pos - 4736286;
+      }
       break;
 
     default:
@@ -24010,6 +25576,7 @@ static void init_span (pointer p)
     normal_paragraph();
   }
 
+  inhibit_glue_flag = false;
   cur_span = p;
 }
 
@@ -24074,6 +25641,7 @@ static void fin_row (void)
     link(tail) = p;
     tail = p;
     space_factor = 1000;
+    inhibit_glue_flag = false;
   }
 
   type(p) = unset_node;
@@ -28898,7 +30466,10 @@ static void box_end (integer box_context)
       else
       {
         if (abs(mode) == hmode)
+        {
           space_factor = 1000;
+          inhibit_glue_flag = false;
+        }
         else
         {
           p = new_noad();
@@ -29035,7 +30606,7 @@ static void begin_box (integer box_context)
         {
           you_cant();
           help2("Sorry...I usually can't take things from the current page.",
-              "This \\lastbox will therefore be void.");
+                "This \\lastbox will therefore be void.");
           error();
         }
         else
@@ -29117,14 +30688,15 @@ done:;
         {
           prev_depth = ignore_depth;
 
-          if (every_vbox != 0)
+          if (every_vbox != null)
             begin_token_list(every_vbox, every_vbox_text);
         }
         else
         {
           space_factor = 1000;
+          inhibit_glue_flag = false;
 
-          if (every_hbox != 0)
+          if (every_hbox != null)
             begin_token_list(every_hbox, every_vbox_text);
         }
 
@@ -29154,8 +30726,8 @@ void scan_box (integer box_context)
   {
     print_err("A <box> was supposed to be here");
     help3("I was expecting to see \\hbox or \\vbox or \\copy or \\box or",
-        "something like that. So you might find something missing in",
-        "your output. But keep trying; you can fix this later.");
+          "something like that. So you might find something missing in",
+          "your output. But keep trying; you can fix this later.");
     back_error();
   }
 }
@@ -29184,7 +30756,7 @@ static void new_graf (boolean indented)
   space_factor = 1000;
   set_cur_lang();
   clang = cur_lang;
-  prev_graf = (norm_min(left_hyphen_min) * 64 + norm_min(right_hyphen_min)) * 65536 + cur_lang;
+  prev_graf = (norm_min(left_hyphen_min) * 0100 + norm_min(right_hyphen_min)) * 0200000 + cur_lang;
 
   if (indented)
   {
@@ -29193,7 +30765,7 @@ static void new_graf (boolean indented)
     width(tail) = par_indent;
   }
 
-  if (every_par != 0)
+  if (every_par != null)
     begin_token_list(every_par, every_par_text);
 
   if (nest_ptr == 1)
@@ -29210,7 +30782,10 @@ static void indent_in_hmode (void)
     width(p) = par_indent;
 
     if (abs(mode) == hmode)
+    {
       space_factor = 1000;
+      inhibit_glue_flag = false;
+    }
     else
     {
       q = new_noad();
@@ -29235,7 +30810,7 @@ static void head_for_vmode (void)
       print_esc("hrule");
       prints("' here except with leaders");
       help2("To put a horizontal rule in an hbox or an alignment,",
-          "you should use \\leaders or \\hrulefill (see The TeXbook).");
+            "you should use \\leaders or \\hrulefill (see The TeXbook).");
       error();
     }
   }
@@ -29292,6 +30867,7 @@ static void begin_insert_or_adjust (void)
 
   saved(0) = cur_val;
   incr(save_ptr);
+  inhibit_glue_flag = false;
   new_save_level(insert_group);
   scan_left_brace();
   normal_paragraph();
@@ -29319,6 +30895,7 @@ static void make_mark (void)
   mark_class(p) = c;
   type(p) = mark_node;
   subtype(p) = 0;
+  inhibit_glue_flag = false;
   mark_ptr(p) = def_ref;
 
   if (!is_char_node(tail) && (type(tail) == disp_node))
@@ -29330,6 +30907,7 @@ static void make_mark (void)
 static void append_penalty (void)
 {
   scan_int();
+  inhibit_glue_flag = false;
 
   if (!is_char_node(tail) && (type(tail) == disp_node))
     prev_append(new_penalty(cur_val));
@@ -29452,32 +31030,40 @@ static void unpackage (void)
   }
 
 done:
-  while (link(tail) != 0)
+  while (link(tail) != null)
   {
     p = tail;
     tail = link(tail);
 
-    if (!is_char_node(tail))
+    if (is_char_node(tail))
+      inhibit_glue_flag = false;
+    else
     {
       switch (type(tail))
       {
         case glue_node:
-          if ((subtype(tail) == kanji_skip_code + 1) ||
-            (subtype(tail) == xkanji_skip_code + 1))
           {
-            link(p) = link(tail);
-            delete_glue_ref(glue_ptr(tail));
-            free_node(tail, small_node_size);
-            tail = p;
+            inhibit_glue_flag = false;
+            if ((subtype(tail) == kanji_skip_code + 1) ||
+              (subtype(tail) == xkanji_skip_code + 1))
+            {
+              link(p) = link(tail);
+              delete_glue_ref(glue_ptr(tail));
+              free_node(tail, small_node_size);
+              tail = p;
+            }
           }
           break;
 
         case penalty_node:
-          if (subtype(tail) == widow_pena)
           {
-            link(p) = link(tail);
-            free_node(tail, small_node_size);
-            tail = p;
+            inhibit_glue_flag = false;
+            if (subtype(tail) == widow_pena)
+            {
+              link(p) = link(tail);
+              free_node(tail, small_node_size);
+              tail = p;
+            }
           }
           break;
 
@@ -29487,6 +31073,10 @@ done:
             disp = disp_dimen(tail);
             prev_node = p;
           }
+          break;
+
+        default:
+          inhibit_glue_flag = false;
           break;
       }
     }
@@ -29535,6 +31125,7 @@ static void append_discretionary (void)
   integer c;
 
   tail_append(new_disc());
+  inhibit_glue_flag = false;
 
   if (cur_chr == 1)
   {
@@ -29611,7 +31202,7 @@ done:
       {
         print_err("Direction Incompatible");
         help2("\\discretionary's argument and outer hlist must have same direction.",
-          "I delete your first part.");
+              "I delete your first part.");
         error();
         pre_break(tail) = null;
         flush_node_list(p);
@@ -29686,6 +31277,7 @@ done:
   push_nest();
   mode = -hmode;
   space_factor = 1000;
+  inhibit_glue_flag = false;
 }
 
 /* sec 1123 */
@@ -29876,6 +31468,7 @@ static void make_accent (void)
 
     append_disp_node_at_end();
     space_factor = 1000;
+    inhibit_glue_flag = false;
   }
 }
 
@@ -30473,8 +32066,6 @@ static void set_math_char (integer c)
       help1("IGNORE.");
       error();
     }
-
-    inhibit_glue_flag = false;
   }
 }
 
@@ -30666,7 +32257,6 @@ static void sub_sup (void)
 
   t = empty;
   p = null;
-  inhibit_glue_flag = false;
 
   if (tail != head)
     if (script_allowed(tail))
@@ -30761,7 +32351,6 @@ static void math_fraction (void)
   small_number c; // {the type of generalized fraction we are scanning}
 
   c = cur_chr;
-  inhibit_glue_flag = false;
 
   if (incompleat_noad != null)
   {
@@ -30825,7 +32414,6 @@ static void math_left_right (void)
   pointer q;  // {resulting mlist}
 
   t = cur_chr;
-  inhibit_glue_flag = false;
 
   if ((t != left_noad) && (cur_group != math_left_group))
   {
@@ -31048,6 +32636,7 @@ static void after_math (void)
     tail_append(new_math(math_surround, after));
     append_disp_node_at_end();
     space_factor = 1000;
+    inhibit_glue_flag = false;
     unsave();
   }
   else
@@ -32025,6 +33614,7 @@ void resume_after_display (void)
   prev_graf = prev_graf + 3;
   push_nest();
   adjust_dir = direction;
+  inhibit_glue_flag = false;
   mode = hmode;
   space_factor = 1000;
   set_cur_lang();
@@ -32883,6 +34473,7 @@ static void new_write_whatsit (small_number w)
   }
 
   write_stream(tail) = cur_val;
+  inhibit_glue_flag = false;
 }
 
 static void do_extension (void)
@@ -32927,9 +34518,10 @@ static void do_extension (void)
       // @<Implement \.{\\special}@>
       {
         new_whatsit(special_node, write_node_size);
-        write_stream(tail) = 0;
+        write_stream(tail) = null;
         p = scan_toks(false, true);
         write_tokens(tail) = def_ref;
+        inhibit_glue_flag = false;
       }
       break;
 
@@ -32940,12 +34532,14 @@ static void do_extension (void)
 
         if ((cur_cmd == extension) && (cur_chr <= close_node))
         {
+          k = inhibit_glue_flag;
           p = tail;
           do_extension();
           out_what(tail);
           flush_node_list(tail);
           tail = p;
-          link(p) = 0;
+          link(p) = null;
+          inhibit_glue_flag = k;
         }
         else
           back_input();
@@ -32958,6 +34552,7 @@ static void do_extension (void)
         report_illegal_case();
       else
       {
+        inhibit_glue_flag = false;
         new_whatsit(language_node, small_node_size);
         scan_int();
 
@@ -32971,6 +34566,31 @@ static void do_extension (void)
         what_lang(tail) = clang;
         what_lhm(tail) = norm_min(left_hyphen_min);
         what_rhm(tail) = norm_min(right_hyphen_min);
+      }
+      break;
+
+    case pdf_save_pos_node:
+      {
+        new_whatsit(pdf_save_pos_node, small_node_size);
+        inhibit_glue_flag = false;
+      }
+      break;
+
+    case reset_timer_code:
+      {
+        aptex_utils_get_seconds_and_micros(&epochseconds, &microseconds);
+      }
+      break;
+
+    case set_random_seed_code:
+      {
+        scan_int();
+
+        if (cur_val < 0)
+          negate(cur_val);
+
+        random_seed = cur_val;
+        init_randoms(random_seed);
       }
       break;
 
@@ -32994,6 +34614,7 @@ static void fix_language (void)
 
   if (l != clang)
   {
+    inhibit_glue_flag = false;
     new_whatsit(language_node, small_node_size);
     what_lang(tail) = l;
     clang = l;
@@ -33383,12 +35004,33 @@ reswitch:
       break;
 
     case any_mode(ignore_spaces):
+      if (cur_chr == 0)
       {
         do {
           get_x_token();
         } while (!(cur_cmd != spacer));
 
         goto reswitch;
+      }
+      else
+      {
+        t = scanner_status;
+        scanner_status = normal;
+        get_next();
+        scanner_status = t;
+
+        if (cur_cs < hash_base)
+          cur_cs = prim_lookup(cur_cs - single_base);
+        else
+          cur_cs = prim_lookup(text(cur_cs));
+
+        if (cur_cs != undefined_primitive)
+        {
+          cur_cmd = prim_eq_type(cur_cs);
+          cur_chr = prim_equiv(cur_cs);
+          cur_tok = cs_token_flag + prim_eqtb_base + cur_cs;
+          goto reswitch;
+        }
       }
       break;
 
@@ -33440,6 +35082,7 @@ reswitch:
     case mmode + vrule:
       {
         tail_append(scan_rule_spec());
+        inhibit_glue_flag = false;
 
         if (abs(mode) == vmode)
           prev_depth = ignore_depth;
@@ -33817,7 +35460,6 @@ reswitch:
       {
         scan_spec(vcenter_group, false);
         normal_paragraph();
-        inhibit_glue_flag = false;
         push_nest();
         mode = -vmode;
         prev_depth = ignore_depth;
@@ -33933,7 +35575,7 @@ reswitch:
       break;
 
     case any_mode(inhibit_glue):
-      inhibit_glue_flag = true;
+      inhibit_glue_flag = (cur_chr == 0);
       break;
 
     case any_mode(extension):
@@ -35143,6 +36785,8 @@ void adjust_hlist (pointer p, boolean pf)
   ASCII_code ax;
   boolean do_ins;
 
+  k = 0;
+
   if (link(p) == null)
     goto exit;
 
@@ -35325,7 +36969,6 @@ void set_math_kchar (integer c)
 
   p = new_noad();
   math_type(nucleus(p)) = math_jchar;
-  inhibit_glue_flag = false;
   character(nucleus(p)) = 0;
   math_kcode(p) = c;
   fam(nucleus(p)) = cur_jfam;
@@ -36145,6 +37788,10 @@ void just_copy (pointer p, pointer h, pointer t)
               r = get_node(small_node_size);
               words = small_node_size;
             }
+            break;
+
+          case pdf_save_pos_node:
+            r = get_node(small_node_size);
             break;
 
           default:

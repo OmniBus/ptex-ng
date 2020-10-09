@@ -23,6 +23,11 @@ with LuaTeX; if not, see <http://www.gnu.org/licenses/>.
 #define __STDC_FORMAT_MACROS /* for PRId64 etc.  */
 
 #include "image/epdf.h"
+#include "luatexcallbackids.h"
+
+/* to be sorted out, we cannot include */
+
+#define xfree(a) do { free(a); a = NULL; } while (0)
 
 /* Conflict with pdfgen.h */
 
@@ -182,6 +187,9 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
             }
         }
         if (pdfe != NULL) {
+            if (ppdoc_crypt_status(pdfe) < 0 && userpassword==NULL) {
+                formatted_error("pdf inclusion","the pdf file '%s' is encrypted, passwords wrong",file_path);
+            }
             if (ppdoc_crypt_status(pdfe) < 0) {
                 ppdoc_crypt_pass(pdfe,userpassword,strlen(userpassword),NULL,0);
             }
@@ -245,7 +253,7 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
         free(checksum);
     }
     if (pdf_doc->pdfe == NULL) {
-        pdfe = ppdoc_mem(docstream, streamsize);
+        pdfe = ppdoc_mem(docstream, (size_t) streamsize);
         pdf_doc->pc++;
         if (pdfe == NULL) {
             normal_error("pdf inclusion","reading pdf Stream failed");
@@ -270,31 +278,37 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
 typedef struct ObjMap ObjMap ;
 
 struct ObjMap {
-    ppref * in;
+ /* int version; */ /* not really needed */
+    int objnum;
     int out_num;
 };
 
 static int CompObjMap(const void *pa, const void *pb, void *p)
 {
-    const ppref *a = (((const ObjMap *) pa)->in);
-    const ppref *b = (((const ObjMap *) pb)->in);
-    if (a->number > b->number)
+    const ObjMap *a = (((const ObjMap *) pa));
+    const ObjMap *b = (((const ObjMap *) pb));
+    if (a->objnum > b->objnum)
         return 1;
-    else if (a->number < b->number)
+    else if (a->objnum < b->objnum)
         return -1;
+    /*
     else if (a->version == b->version)
         return 0;
     else if (a->version < b->version)
         return -1;
     return 1;
+    */
+    return 0;
 }
 
 static ObjMap *findObjMap(PdfDocument * pdf_doc, ppref * in)
 {
     ObjMap *obj_map, tmp;
-    if (pdf_doc->ObjMapTree == NULL)
+    if (pdf_doc->ObjMapTree == NULL) {
         return NULL;
-    tmp.in = in;
+    }
+    tmp.objnum = in->number;
+ /* tmp.version = in->version; */
     obj_map = (ObjMap *) avl_find(pdf_doc->ObjMapTree, &tmp);
     return obj_map;
 }
@@ -302,10 +316,12 @@ static ObjMap *findObjMap(PdfDocument * pdf_doc, ppref * in)
 static void addObjMap(PdfDocument * pdf_doc, ppref * in, int out_num)
 {
     ObjMap *obj_map = NULL;
-    if (pdf_doc->ObjMapTree == NULL)
+    if (pdf_doc->ObjMapTree == NULL) {
         pdf_doc->ObjMapTree = avl_create(CompObjMap, NULL, &avl_xallocator);
+    }
     obj_map = (ObjMap*)xmalloc(sizeof(ObjMap));
-    obj_map->in = in;
+ /* obj_map->version = in->version; */
+    obj_map->objnum = in->number;
     obj_map->out_num = out_num;
     avl_probe(pdf_doc->ObjMapTree, obj_map);
 }
@@ -332,7 +348,8 @@ static int addInObj(PDF pdf, PdfDocument * pdf_doc, ppref * ref)
         return obj_map->out_num;
     }
     n = (InObj*)xmalloc(sizeof(InObj));
-    n->ref = ref;
+    n->objnum = ref->number;
+ /* n->version = ref->version; */
     n->next = NULL;
     n->num = pdf_create_obj(pdf, obj_type_others, 0);
     addObjMap(pdf_doc, ref, n->num);
@@ -353,24 +370,24 @@ static int addInObj(PDF pdf, PdfDocument * pdf_doc, ppref * ref)
 
 static void copyObject(PDF, PdfDocument *, ppobj *);
 
-static void copyString(PDF pdf, ppstring str)
+static void copyString(PDF pdf, ppstring *str)
 {
     pdf_check_space(pdf);
-    switch (ppstring_type((void *)(str))) {
+    switch (ppstring_type(str)) {
         case PPSTRING_PLAIN:
             pdf_out(pdf, '(');
-            pdf_out_block(pdf, (const char *) str, ppstring_size((void *)(str)));
+            pdf_out_block(pdf, ppstring_data(str), ppstring_size(str));
             pdf_out(pdf, ')');
             break;
         case PPSTRING_BASE16:
             pdf_out(pdf, '<');
-            pdf_out_block(pdf, (const char *) str, ppstring_size((void *)(str)));
+            pdf_out_block(pdf, ppstring_data(str), ppstring_size(str));
             pdf_out(pdf, '>');
             break;
         case PPSTRING_BASE85:
             pdf_out(pdf, '<');
             pdf_out(pdf, '~');
-            pdf_out_block(pdf, (const char *) str, ppstring_size((void *)(str)));
+            pdf_out_block(pdf, ppstring_data(str), ppstring_size(str));
             pdf_out(pdf, '~');
             pdf_out(pdf, '>');
             break;
@@ -378,12 +395,10 @@ static void copyString(PDF pdf, ppstring str)
     pdf_set_space(pdf);
 }
 
-/*
 static void copyName(PDF pdf, ppname *name)
 {
-    pdf_add_name(pdf, (const char *) name);
+    pdf_add_name(pdf, ppname_data(name));
 }
-*/
 
 static void copyArray(PDF pdf, PdfDocument * pdf_doc, pparray * array)
 {
@@ -402,13 +417,14 @@ static void copyDict(PDF pdf, PdfDocument * pdf_doc, ppdict *dict)
     int n = dict->size;
     pdf_begin_dict(pdf);
     for (i=0; i<n; ++i) {
-        pdf_add_name(pdf, (const char *) ppdict_key(dict,i));
+        ppname *key = ppdict_key(dict,i);
+        pdf_add_name(pdf,ppname_data(key));
         copyObject(pdf, pdf_doc, ppdict_at(dict,i));
     }
     pdf_end_dict(pdf);
 }
 
-static void copyStreamStream(PDF pdf, ppstream * stream, int decode)
+static void copyStreamStream(PDF pdf, ppstream * stream, int decode, int callback_id)
 {
     uint8_t *data = NULL;
     size_t size = 0;
@@ -419,7 +435,18 @@ static void copyStreamStream(PDF pdf, ppstream * stream, int decode)
     } else {
         data = ppstream_all(stream,&size,decode);
         if (data != NULL) {
-            pdf_out_block(pdf, (const char *) data, size);
+            /*tex We only do this when we recompress in which case we fetch the whole stream. */
+            if (callback_id == 1) {
+                callback_id = callback_defined(process_pdf_image_content_callback);
+            }
+            if (callback_id) {
+                char *result = NULL;
+                run_callback(callback_id, "S->S",(char *) data,&result);
+                pdf_out_block(pdf, (const char *) (uint8_t *) result, size);
+                xfree(result);
+            } else {
+                pdf_out_block(pdf, (const char *) data, size);
+            }
         }
     }
     ppstream_done(stream);
@@ -429,38 +456,56 @@ static void copyStream(PDF pdf, PdfDocument * pdf_doc, ppstream * stream)
 {
     ppdict *dict = stream->dict; /* bug in: stream_dict(stream) */
     if (pdf->compress_level == 0 || pdf->recompress) {
-        const char *ignoredkeys[] = {
-            "Filter", "Decode", "Length", "DL", NULL
-        };
-        int i;
-        int n = dict->size;
-        pdf_begin_dict(pdf);
-        for (i=0; i<n; ++i) {
-            const char *key = ppdict_key(dict,i);
-            int okay = 1;
+        ppobj * obj = ppdict_get_obj (dict, "Filter");
+        int known = 0;
+        if (obj != NULL && obj->type == PPNAME) {
+            const char *codecs[] = {
+                "ASCIIHexDecode", "ASCII85Decode", "RunLengthDecode",
+                "FlateDecode", "LZWDecode", NULL
+            };
             int k;
-            for (k = 0; ignoredkeys[k] != NULL; k++) {
-                if (strcmp(key,ignoredkeys[k]) == 0) {
-                    okay = 0;
+            for (k = 0; codecs[k] != NULL; k++) {
+                if (strcmp(ppname_data(obj->name),codecs[k]) == 0) {
+                    known = 1;
                     break;
                 }
             }
-            if (okay) {
-                pdf_add_name(pdf, key);
-                copyObject(pdf, pdf_doc, ppdict_at(dict,i));
-            }
         }
-        pdf_dict_add_streaminfo(pdf);
-        pdf_end_dict(pdf);
-        pdf_begin_stream(pdf);
-        copyStreamStream(pdf, stream, 1);
-        pdf_end_stream(pdf);
-    } else {
-        copyDict(pdf, pdf_doc, dict);
-        pdf_begin_stream(pdf);
-        copyStreamStream(pdf, stream, 0);
-        pdf_end_stream(pdf);
+        if (known) {
+            /*tex recompress or keep uncompressed */
+            const char *ignoredkeys[] = {
+                "Filter", "DecodeParms", "Length", "DL", NULL
+            };
+            int i;
+            pdf_begin_dict(pdf);
+            for (i=0; i<dict->size; ++i) {
+                ppname *key = ppdict_key(dict,i);
+                int copy = 1;
+                int k;
+                for (k = 0; ignoredkeys[k] != NULL; k++) {
+                    if (strcmp(ppname_data(key),ignoredkeys[k]) == 0) {
+                        copy = 0;
+                        break;
+                    }
+                }
+                if (copy) {
+                    pdf_add_name(pdf, ppname_data(key));
+                    copyObject(pdf, pdf_doc, ppdict_at(dict,i));
+                }
+            }
+            pdf_dict_add_streaminfo(pdf);
+            pdf_end_dict(pdf);
+            pdf_begin_stream(pdf);
+            copyStreamStream(pdf, stream, 1, 0);
+            pdf_end_stream(pdf);
+            return ;
+        }
     }
+    /* copy as-is */
+    copyDict(pdf, pdf_doc, dict);
+    pdf_begin_stream(pdf);
+    copyStreamStream(pdf, stream, 0, 0);
+    pdf_end_stream(pdf);
 }
 
 static void copyObject(PDF pdf, PdfDocument * pdf_doc, ppobj * obj)
@@ -479,7 +524,7 @@ static void copyObject(PDF pdf, PdfDocument * pdf_doc, ppobj * obj)
             pdf_add_real(pdf,obj->number);                      /* ppobj_get_num_value(obj) */
             break;
         case PPNAME:
-            pdf_add_name(pdf, (const char *) obj->name);        /* ppobj_get_name(obj) */
+            copyName(pdf, obj->name);
             break;
         case PPSTRING:
             copyString(pdf, obj->string);                       /* ppobj_get_string(obj) */
@@ -505,20 +550,33 @@ static void writeRefs(PDF pdf, PdfDocument * pdf_doc)
 {
     InObj *r, *n;
     ppobj * obj;
+    ppref * ref ;
+    ppxref * xref = ppdoc_xref (pdf_doc->pdfe);
     for (r = pdf_doc->inObjList; r != NULL;) {
-        obj = ppref_obj(r->ref);
-        if (obj->type == PPSTREAM)
-            pdf_begin_obj(pdf, r->num, OBJSTM_NEVER);
-        else
-            pdf_begin_obj(pdf, r->num, 2);
-        copyObject(pdf, pdf_doc, obj);
-        pdf_end_obj(pdf);
+        if (xref != NULL) {
+            ref = ppxref_find(xref, (ppuint) r->objnum);
+            if (ref != NULL) {
+                obj = ppref_obj(ref);
+                if (obj->type == PPSTREAM) {
+                    pdf_begin_obj(pdf, r->num, OBJSTM_NEVER);
+                } else {
+                    pdf_begin_obj(pdf, r->num, 2);
+                }
+                copyObject(pdf, pdf_doc, obj);
+                pdf_end_obj(pdf);
+            } else {
+                formatted_warning("pdf inclusion","ignoring missing object %i, case 1\n",(int) r->objnum);
+            }
+        } else {
+            formatted_warning("pdf inclusion","ignoring missing object %i, case 2\n",(int) r->objnum);
+        }
         n = r->next;
         free(r);
         r = n;
         pdf_doc->inObjList = n;
     }
 }
+
 
 /* get the pagebox coordinates according to the pagebox_spec */
 
@@ -578,11 +636,6 @@ static ppdict * get_pdf_page_dict(ppdoc *pdfe, int n)
     return NULL;
 }
 
-// static ppdict * get_pdf_page_dict(ppdoc *pdfe, int n)
-// {
-//     return ppref_obj(ppdoc_page(pdfe,n))->dict;
-// }
-
 void read_pdf_info(image_dict * idict)
 {
     PdfDocument *pdf_doc = NULL;
@@ -592,7 +645,7 @@ void read_pdf_info(image_dict * idict)
     ppint rotate = 0;
     int pdf_major_version_found = 1;
     int pdf_minor_version_found = 3;
-    float xsize, ysize, xorig, yorig;
+    double xsize, ysize, xorig, yorig;
     if (img_type(idict) == IMG_TYPE_PDF) {
         pdf_doc = refPdfDocument(img_filepath(idict), FE_FAIL, img_userpassword(idict), img_ownerpassword(idict));
     } else if (img_type(idict) == IMG_TYPE_PDFMEMSTREAM) {
@@ -612,7 +665,7 @@ void read_pdf_info(image_dict * idict)
         then have to changed drastically anyway.
     */
     pdf_major_version_found = ppdoc_version_number(pdfe,&pdf_minor_version_found);
-    if ((100 * pdf_major_version_found + pdf_major_version_found) > (100 * img_pdfmajorversion(idict) + img_pdfminorversion(idict))) {
+    if ((100 * pdf_major_version_found + pdf_minor_version_found) > (100 * img_pdfmajorversion(idict) + img_pdfminorversion(idict))) {
         const char *msg = "PDF inclusion: found PDF version '%d.%d', but at most version '%d.%d' allowed";
         if (img_errorlevel(idict) > 0) {
             formatted_error("pdf inclusion",msg, pdf_major_version_found, pdf_minor_version_found, img_pdfmajorversion(idict), img_pdfminorversion(idict));
@@ -638,6 +691,9 @@ void read_pdf_info(image_dict * idict)
         get the required page
     */
     pageDict = get_pdf_page_dict(pdfe,img_pagenum(idict));
+    if (pageDict==NULL) {
+      formatted_error("pdf inclusion","unable to retrive dictionary for page '%i'",(int) img_pagenum(idict));
+    }
     /*
         get the pagebox coordinates (media, crop,...) to use
     */
@@ -750,6 +806,9 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
     }
     pdfe = pdf_doc->pdfe;
     pageDict = get_pdf_page_dict(pdfe,img_pagenum(idict));
+    if (pageDict==NULL) {
+      formatted_error("pdf inclusion","unable to retrive dictionary for page '%i'",(int) img_pagenum(idict));
+    }
     /*
         write the Page header
     */
@@ -851,12 +910,12 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
         Write the Page contents.
     */
     content = ppdict_rget_obj(pageDict, "Contents");
-    if (content->type == PPSTREAM) {
+    if (content && content->type == PPSTREAM) {
         if (pdf->compress_level == 0 || pdf->recompress) {
             pdf_dict_add_streaminfo(pdf);
             pdf_end_dict(pdf);
             pdf_begin_stream(pdf);
-            copyStreamStream(pdf, content->stream,1); /* decompress */
+            copyStreamStream(pdf, content->stream, 1, 1); /* decompress */
         } else {
             /* copies compressed stream */
             ppstream * stream = content->stream;
@@ -878,18 +937,18 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
                     }
                     */
                 }
-               pdf_end_dict(pdf);
+                pdf_end_dict(pdf);
                 pdf_begin_stream(pdf);
-                copyStreamStream(pdf, stream,0);
+                copyStreamStream(pdf, stream, 0, 0);
             } else {
                 pdf_dict_add_streaminfo(pdf);
                 pdf_end_dict(pdf);
                 pdf_begin_stream(pdf);
-                copyStreamStream(pdf, stream,1);
+                copyStreamStream(pdf, stream, 1, 0);
             }
         }
         pdf_end_stream(pdf);
-    } else if (content->type == PPARRAY) {
+    } else if (content && content->type == PPARRAY) {
         /* listens to compresslevel */
         pdf_dict_add_streaminfo(pdf);
         pdf_end_dict(pdf);
@@ -913,7 +972,7 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
                     } else {
                         b = 1;
                     }
-                    copyStreamStream(pdf, (ppstream *) o->stream,1);
+                    copyStreamStream(pdf, (ppstream *) o->stream, 1, 0);
                 }
             }
         }
@@ -951,19 +1010,25 @@ int write_epdf_object(PDF pdf, image_dict * idict, int n)
     } else {
         PdfDocument * pdf_doc = refPdfDocument(img_filepath(idict), FE_FAIL, img_userpassword(idict), img_ownerpassword(idict));
         ppdoc * pdfe = pdf_doc->pdfe;
-        ppref * ref = ppxref_find(ppdoc_xref(pdfe), (ppuint) n);
-        if (ref != NULL) {
-            ppobj *obj;
-            num = pdf->obj_count++;
-            obj = ppref_obj(ref);
-            if (obj->type == PPSTREAM) {
-                pdf_begin_obj(pdf, num, OBJSTM_NEVER);
+        if (ppdoc_xref(pdfe)) {
+            ppref * ref = ppxref_find(ppdoc_xref(pdfe), (ppuint) n);
+            if (ref != NULL) {
+                ppobj *obj;
+                num = pdf->obj_count++;
+                obj = ppref_obj(ref);
+                if (obj->type == PPSTREAM) {
+                    pdf_begin_obj(pdf, num, OBJSTM_NEVER);
+                } else {
+                    pdf_begin_obj(pdf, num, 2);
+                }
+                copyObject(pdf, pdf_doc, obj);
+                pdf_end_obj(pdf);
+                writeRefs(pdf, pdf_doc);
             } else {
-                pdf_begin_obj(pdf, num, 2);
+                formatted_warning("pdf inclusion","ignoring missing image %i, case 1\n",(int) n);
             }
-            copyObject(pdf, pdf_doc, obj);
-            pdf_end_obj(pdf);
-            writeRefs(pdf, pdf_doc);
+        } else {
+            formatted_warning("pdf inclusion","ignoring missing image %i, case 2\n",(int) n);
         }
         if (! img_keepopen(idict)) {
             unrefPdfDocument(img_filepath(idict));

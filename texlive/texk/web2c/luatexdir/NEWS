@@ -1,4 +1,64 @@
 ==============================================================
+LuaTeX 1.12.0 2020-03-15
+==============================================================
+
+This is the release for TeX live 2020.
+--shell-restricted now forbids loading of dso (dll/so object)
+Scaled virtual font
+Aadditional primitives  \eTeXglue[stretch|shrink]order for querying order the etex way.
+Extra features runtoks
+tex.getmodenames() (as these can differ per engine/version)
+Permit nested runtoks in more complex situations of nesting (HH)
+More accurate and correct test for tex.[set|get]math
+Minor clean-up and bugs fixed
+
+
+
+==============================================================
+LuaTeX 1.11.1 2019-10-28
+==============================================================
+
+First release of luahbtex / luajithbtex, 
+luatex / luajittex with harfbuzz.
+Small bug fixes, code clean up and a couple of new primitives
+to match eTeX.
+A new callback lua.getcodepage()  for diagnostic purposes.
+*** DROPPED the   "page_objnum_provider" callback, replaced with "page_order_index". ***
+See ChangeLog and the manual.
+
+
+
+==============================================================
+LuaTeX 1.10.0 2019-03-15
+==============================================================
+
+This the release for TeX Live 2019. 
+Small bug fixes, code clean up.
+This is a stable release: only bug-fixes until the next TeX Live. 
+
+
+
+==============================================================
+LuaTeX 1.09.2 2019-01-19
+==============================================================
+
+This is a transitional release to LuaTeX 1.10 for TeX Live 2019
+
+
+
+==============================================================
+LuaTeX 1.09 2018-10-23
+==============================================================
+
+(1) This is a release that fixed some bugs, and the latest 
+with lua 5.2. 
+
+(2) luaffi is still incomplete, so very likely there will be
+a new release 1.09.1 before the next year.
+
+
+
+==============================================================
 LuaTeX 1.08 2018-08-28
 ==============================================================
 

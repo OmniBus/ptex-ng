@@ -1,9 +1,9 @@
 #!/usr/bin/env texlua
 
--- Copyright 2016-2018 Brian Dunn
+-- Copyright 2016-2020 Brian Dunn
 
-printversion = "v0.61"
-requiredconfversion = "1" -- also at *lwarpmk.conf
+printversion = "v0.892"
+requiredconfversion = "2" -- also at *lwarpmk.conf
 
 function printhelp ()
 print ("lwarpmk: Use lwarpmk -h or lwarpmk --help for help.") ;
@@ -31,14 +31,34 @@ lwarpmk pdftohtml [-p project]:
     Finishes the HTML conversion even if there was a compile error.
 lwarpmk pdftosvg <list of file names>: Converts each PDF file to SVG.
 lwarpmk epstopdf <list of file names>: Converts each EPS file to PDF.
-lwarpmk clean [-p project]: Remove .aux, .toc, .lof/t, .idx, .ind, .log, *_html_inc.*, .gl*
-lwarpmk cleanall [-p project]: Remove auxiliary files and also project.pdf, *.html
+lwarpmk clean [-p project]: Remove *.aux, *.toc, *.lof/t,
+    *.idx, *.ind, *.bbl, *.log, *_html_inc.*, .gl*,
+    *_html.pdf, *_html.html, *_html.sidetoc
+lwarpmk cleanall [-p project]: Remove auxiliary files, project.pdf, *.html
 lwarpmk cleanlimages: Removes all images from the "lateximages" directory.
+lwarpmk -v: Print the version number.
 lwarpmk -h: Print this help message.
 lwarpmk --help: Print this help message.
 
 ]] )
 -- printconf ()
+end
+
+function splitfilename ( pathandfilename )
+--
+-- Separates out the path and extension from a filename.
+-- Returns path, filename with extension, and extension.
+-- Ex: thispath, thisfilename, thisextension = splitfilename ("path/to/filename.ext")
+--
+-- https://www.fhug.org.uk/wiki/wiki/doku.php?id=plugins:code_snippets:
+--      split_filename_in_to_path_filename_and_extension
+--
+    if lfs.attributes(pathandfilename,"mode") == "directory" then
+        local strPath = pathandfilename:gsub("[\\/]$","") -- $ (syntax highlighting)
+        return strPath.."\\","",""
+    end
+    pathandfilename = pathandfilename.."."
+    return pathandfilename:match("^(.-)([^\\/]-)%.([^\\/%.]-)%.?$")
 end
 
 function splitfile (destfile,sourcefile)
@@ -78,6 +98,20 @@ function cvalueerror ( line, linenum , cvalue )
     os.exit(1) ;
 end
 
+function printhowtorecompile ()
+-- Tells the user how to recompile to regenerate the configuration files.
+    print ("lwarpmk: The configuration files lwarpmk.conf and "..sourcename..".lwarpmkconf" )
+    print ("lwarpmk:   must be updated.  To do so, recompile" )
+    print ("lwarpmk:   " , sourcename..".tex" )
+    if ( printlatexcmd == "" ) then
+        print ("lwarpmk:   using xe/lua/pdflatex," )
+    else
+        print ("lwarpmk:   using the command:")
+        print ("lwarpmk:   " , printlatexcmd )
+    end
+    print ("lwarpmk:   then use lwarpmk again.")
+end -- printhowtorecompile
+
 function ignoreconf ()
 -- Global argument index
 argindex = 2
@@ -102,6 +136,8 @@ end
 -- Additional defaults:
 confversion = "0"
 opsystem = "Unix"
+imagesdirectory = "lateximages"
+imagesname = "image-"
 latexmk = "false"
 printlatexcmd = ""
 HTMLlatexcmd = ""
@@ -163,6 +199,8 @@ elseif ( cvarname == "opsystem" ) then
 elseif ( cvarname == "sourcename" ) then sourcename = cvalue
 elseif ( cvarname == "homehtmlfilename" ) then homehtmlfilename = cvalue
 elseif ( cvarname == "htmlfilename" ) then htmlfilename = cvalue
+elseif ( cvarname == "imagesdirectory" ) then imagesdirectory = cvalue
+elseif ( cvarname == "imagesname" ) then imagesname = cvalue
 elseif ( cvarname == "latexmk" ) then latexmk = cvalue
 elseif ( cvarname == "printlatexcmd" ) then printlatexcmd = cvalue
 elseif ( cvarname == "HTMLlatexcmd" ) then HTMLlatexcmd = cvalue
@@ -191,7 +229,9 @@ if sourcename=="lwarp" then
     print ("lwarpmk: ===")
     print ("lwarpmk: lwarp.sty has recently been recompiled in this directory,")
     print ("lwarpmk: and \"lwarpmk.conf\" is no longer set for your own project.")
-    print ("lwarpmk: Recompile your own project using pdf/lua/xelatex <projectname>.")
+    print ("lwarpmk:   (Perhaps you are not in your project's directory?)")
+    print ("lwarpmk: In your project directory, recompile your project")
+    print ("lwarpmk: using pdf/lua/xelatex <projectname>.")
     print ("lwarpmk: After a recompile, \"lwarpmk.conf\" will be set for your project,")
     print ("lwarpmk: and you may again use lwarpmk.")
     print ("lwarpmk: ===")
@@ -235,19 +275,14 @@ end --- for Windows
 if ( (package.config:sub(1,1)) ~= dirslash ) then
     print ("lwarpmk: ===")
     print ("lwarpmk: It appears that lwarpmk.conf is for a different operating system." )
-    print ("lwarpmk: To adjust lwarpmk.conf for the current operating system," )
-    print ("lwarpmk:   recompile the original document using xe/lua/pdflatex." )
-    print ("lwarpmk: ")
-    print ("lwarpmk: lwarpmk shall attempt to continue...")
+    printhowtorecompile ()
     print ("lwarpmk: ===")
+    os.exit(1)
 end
 -- Error if the configuration file's version is not current:
 if ( confversion ~= requiredconfversion ) then
     print ("lwarpmk: ===")
-    print ("lwarpmk: The configuration files lwarpmk.conf and "..sourcename..".lwarpmkconf" )
-    print ("lwarpmk:   must be updated.  To update the configuration files," )
-    print ("lwarpmk:   recompile "..sourcename..".tex using xe/lua/pdflatex," )
-    print ("lwarpmk:   then use lwarpmk again.")
+    printhowtorecompile ()
     print ("lwarpmk: ===")
     os.exit(1)
 end
@@ -344,17 +379,24 @@ function removeaux ()
 --
 -- Remove auxiliary files:
 -- All .aux files are removed since there may be many bbl*.aux files.
+-- Also removes sourcename_html.pdf, sourcename_html.html,
+-- and sourcename_html.sidetoc, plus comment_*.cut.
 --
 os.execute ( rmname .. " *.aux " ..
     sourcename ..".toc " .. sourcename .. "_html.toc " ..
     sourcename ..".lof " .. sourcename .. "_html.lof " ..
     sourcename ..".lot " .. sourcename .. "_html.lot " ..
+    sourcename ..".bbl " .. sourcename .. "_html.bbl " ..
     " *.idx " ..
     " *.ind " ..
     sourcename ..".ps " .. sourcename .."_html.ps " ..
     sourcename ..".log " .. sourcename .. "_html.log " ..
     sourcename ..".gl* " .. sourcename .. "_html.gl* " ..
-    " *_html_inc.* "
+    sourcename .. "_html.pdf " ..
+    sourcename .. "_html.html " ..
+    sourcename .. "_html.sidetoc " ..
+    " *_html_inc.* " ..
+    " comment_*.cut"
     )
 end
 
@@ -378,34 +420,43 @@ end -- checkhtmlpdfexists
 
 function warnlimages ()
 --
--- Warning of a missing lateximages.txt file:
---
+-- Warning of a missing <sourcename>-images.txt file:
     print ("lwarpmk: ===")
-    print ("lwarpmk: \"lateximages.txt\" does not exist.")
+    print ("lwarpmk: \"" .. sourcename .. "-images.txt\" does not exist.")
     print ("lwarpmk: Your project does not use SVG math or other lateximages,")
     print ("lwarpmk: or the file has been deleted somehow.")
-    print ("lwarpmk: Use \"lwarpmk html\" to recompile your project")
-    print ("lwarpmk: and recreate \"lateximages.txt\".")
+    print ("lwarpmk: Use \"lwarpmk html1\" to recompile your project")
+    print ("lwarpmk: and recreate \"" .. sourcename .. "-images.txt\".")
     print ("lwarpmk: If your project does not use SVG math or other lateximages,")
-    print ("lwarpmk: then \"lateximages.txt\" will never exist, and")
+    print ("lwarpmk: then \"" .. sourcename .. "-images.txt\" will never exist, and")
     print ("lwarpmk: \"lwarpmk limages\" will not be necessary.")
     print ("lwarpmk: ===")
 end -- warnlimages
 
+function warnlimagesrecompile ()
+-- Warning if must recompile before creating limages:
+    print ("")
+    print ("lwarpmk: ===")
+    print ("lwarpmk: Cross-references are not yet correct.")
+    print ("lwarpmk: The document must be recompiled before creating the lateximages.")
+    print ("lwarpmk: Enter \"lwarpmk html1\" again, then try \"lwarpmk limages\" again.")
+    print ("lwarpmk: ===")
+end --warnlimagesrecompile
+
 function checklimages ()
 --
--- Check lateximages.txt to see if need to recompile first.
+-- Check <sourcename>.txt to see if need to recompile first.
 -- If any entry has a page number of zero, then there were incorrect images.
 --
-print ("lwarpmk: Checking for a valid lateximages.txt file.")
-local limagesfile = io.open("lateximages.txt", "r")
+print ("lwarpmk: Checking for a valid " .. sourcename .. "-images.txt file.")
+local limagesfile = io.open(sourcename .. "-images.txt", "r")
 if ( limagesfile == nil ) then
     warnlimages ()
     os.exit(1)
 end
 -- Track warning to recompile if find a page 0
 local pagezerowarning = false
--- Scan lateximages.txt
+-- Scan <sourcename>.txt
 for line in limagesfile:lines() do
     -- lwimgpage is the page number in the PDF which has the image
     -- lwimghash is true if this filename is a hash
@@ -420,12 +471,14 @@ for line in limagesfile:lines() do
         end
     end -- if i~=nil
 end -- do
+-- The last line should be |end|end|end|.
+-- If not, the compile must have aborted, and the images are incomplete.
+if ( lwimgpage ~= "end" ) then
+    warnlimagesrecompile()
+    os.exit(1) ;
+end
 if ( pagezerowarning ) then
-    print ("")
-    print ("lwarpmk: ===")
-    print ("lwarpmk: The document must be recompiled before creating the lateximages.")
-    print ("lwarpmk: Enter \"lwarpmk html\" again, then try \"lwarpmk limages\" again.")
-    print ("lwarpmk: ===")
+    warnlimagesrecompile()
     os.exit(1) ;
 end -- pagezerowarning
 end -- checklimages
@@ -438,20 +491,20 @@ executecheckerror (
     cmdgroupopenname ..
     "pdfseparate -f " .. lwimgpage .. " -l " .. lwimgpage .. " " ..
         sourcename .."_html.pdf " ..
-        "lateximages" .. dirslash .."lateximagetemp-%d" .. ".pdf" ..
+        imagesdirectory .. dirslash .."lateximagetemp-%d" .. ".pdf" ..
         seqname ..
     -- Crop the image:
-    "pdfcrop  --hires  lateximages" .. dirslash .. "lateximagetemp-" ..
+    "pdfcrop  --hires  " .. imagesdirectory .. dirslash .. "lateximagetemp-" ..
         lwimgpage .. ".pdf " ..
-        "lateximages" .. dirslash .. lwimgname .. ".pdf" ..
+        imagesdirectory .. dirslash .. lwimgname .. ".pdf" ..
         seqname ..
     -- Convert the image to svg:
-    "pdftocairo -svg  -noshrink  lateximages" .. dirslash .. lwimgname .. ".pdf " ..
-        "lateximages" .. dirslash .. lwimgname ..".svg" ..
+    "pdftocairo -svg  -noshrink  " .. imagesdirectory .. dirslash .. lwimgname .. ".pdf " ..
+        imagesdirectory .. dirslash .. lwimgname ..".svg" ..
         seqname ..
     -- Remove the temporary files:
-    rmname .. " lateximages" .. dirslash .. lwimgname .. ".pdf" .. seqname ..
-    rmname .. " lateximages" .. dirslash .. "lateximagetemp-" .. lwimgpage .. ".pdf" ..
+    rmname .. " " .. imagesdirectory .. dirslash .. lwimgname .. ".pdf" .. seqname ..
+    rmname .. " " .. imagesdirectory .. dirslash .. "lateximagetemp-" .. lwimgpage .. ".pdf" ..
     cmdgroupclosename .. " >/dev/null " .. bgname
     ,
     "File error trying to convert " .. lwimgfullname
@@ -494,7 +547,7 @@ end -- createwindowsimage
 
 function createonelateximage ( line )
 --
--- Given the next line of lateximages.txt, convert a single image.
+-- Given the next line of <sourcename>.txt, convert a single image.
 --
 -- lwimgpage is the page number in the PDF which has the image
 -- lwimghash is true if this filename is a hash
@@ -505,9 +558,11 @@ if ( (i~=nil) ) then
     -- Skip if the page number is 0:
     if ( lwimgpage == "0" ) then
         pagezerowarning = true
+    -- Skip if the page number is "end":
+    else if ( lwimgpage == "end" ) then
     else
         -- Skip is this image is hashed and already exists:
-        local lwimgfullname = "lateximages" .. dirslash .. lwimgname .. ".svg"
+        local lwimgfullname = imagesdirectory .. dirslash .. lwimgname .. ".svg"
         if (
             (lwimghash ~= "true") or
             (lfs.attributes(lwimgfullname,"mode")==nil) -- file not exists
@@ -527,27 +582,28 @@ if ( (i~=nil) ) then
                 createwindowsimage (lwimgfullname)
             end
         end -- not hashed or not exists
+    end -- not page "end"
     end -- not page 0
 end -- not nil
 end -- createonelateximage
 
 function createlateximages ()
 --
--- Create lateximages based on lateximages.txt:
+-- Create lateximages based on <sourcename>-images.txt:
 --
 -- See if the document must be recompiled first:
 checklimages ()
--- See if the print version exists:
+-- See if the HTML version exists:
 checkhtmlpdfexists ()
 -- Attempt to create the lateximages:
 print ("lwarpmk: Creating lateximages.")
-local limagesfile = io.open("lateximages.txt", "r")
+local limagesfile = io.open(sourcename .. "-images.txt", "r")
 if ( limagesfile == nil ) then
-    warnlateximages ()
+    warnlimages ()
     os.exit(1)
 end
 -- Create the lateximages directory, ignore error if already exists
-err = os.execute("mkdir lateximages")
+err = os.execute("mkdir " .. imagesdirectory)
 -- For Windows, create lwarp_one_limage.cmd from lwarp_one_limage.txt:
 if opsystem=="Windows" then
     executecheckerror (
@@ -559,7 +615,7 @@ end -- create lwarp_one_limage.cmd
 numimageprocesses = 0
 -- Track warning to recompile if find a page 0
 pagezerowarning = false
--- Scan lateximages.txt
+-- Scan <sourcename>.txt
 for line in limagesfile:lines() do
     createonelateximage ( line )
 end -- do
@@ -581,7 +637,7 @@ function convertepstopdf ()
 --
 -- Converts EPS files to PDF files.
 -- The filenames are arg[argindex] and up.
--- arg[1] is the command "pdftosvg".
+-- arg[1] is the command "epstopdf".
 --
 ignoreconf ()
 for i = argindex , #arg do
@@ -589,7 +645,16 @@ for i = argindex , #arg do
         print ("lwarpmk: File \"" .. arg[i] .. "\" does not exist.")
     else
         print ("lwarpmk: Converting \"" .. arg[i] .. "\"")
-        os.execute ( "epstopdf " .. arg[i] )
+        thispath, thisfilename, thisextension = splitfilename(arg[i])
+        if ( thispath == nil ) then
+            os.execute ( "epstopdf " .. arg[i] )
+        else
+            os.execute (
+                "epstopdf " ..
+                thispath .. thisfilename .. "." .. thisextension .. " " ..
+                thispath .. thisfilename .. ".pdf"
+            )
+        end
     end -- if
 end -- do
 end --function
@@ -606,7 +671,16 @@ for i = argindex , #arg do
         print ("lwarpmk: File \"" .. arg[i] .. "\" does not exist.")
     else
         print ("lwarpmk: Converting \"" .. arg[i] .. "\"")
-        os.execute ( "pdftocairo -svg " .. arg[i] )
+        thispath, thisfilename, thisextension = splitfilename(arg[i])
+        if ( thispath == nil ) then
+            os.execute ( "pdftocairo -svg " .. arg[i] )
+        else
+            os.execute (
+                "pdftocairo -svg " ..
+                thispath .. thisfilename .. "." .. thisextension .. " " ..
+                thispath .. thisfilename .. ".svg"
+            )
+        end
     end -- if
 end -- do
 end --function
@@ -630,7 +704,7 @@ else -- not --version
 
 -- print intro:
 
-print ("lwarpmk: " .. printversion .. "  Automated make for the LaTeX lwarp package.")
+print ("lwarpmk: " .. printversion .. "  Automated make for the LaTeX Lwarp package.")
 
 -- lwarpmk print:
 
@@ -757,7 +831,7 @@ os.execute(glossarycmd .. " " .. sourcename .. "_html")
 updateanddone ()
 
 -- lwarpmk limages:
--- Scan the lateximages.txt file to create lateximages.
+-- Scan the <sourcename>.txt file to create lateximages.
 
 elseif arg[1] == "limages" then
 loadconf ()
@@ -795,11 +869,11 @@ os.execute ( rmname .. " " ..
 print ("lwarpmk: Done.")
 
 -- lwarpmk cleanlimages
--- Remove images from the lateximages directory.
+-- Remove images from the imagesdirectory.
 
 elseif arg[1] == "cleanlimages" then
 loadconf ()
-os.execute ( rmname .. " lateximages/*" )
+os.execute ( rmname .. " " .. imagesdirectory .. dirslash .. "*" )
 print ("lwarpmk: Done.")
 
 -- lwarpmk epstopdf <list of file names>
@@ -818,6 +892,12 @@ print ("lwarpmk: Done.")
 
 elseif (arg[1] == nil) then
 printhelp ()
+
+-- lwarpmk -v:
+
+elseif (arg[1] == "-v" ) then
+-- The version number has already been printed
+-- by the lwarpmk intro.
 
 -- lwarpmk -h or lwarpmk --help :
 

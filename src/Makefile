@@ -1,28 +1,31 @@
 #
-# Copyright (c) 2014, 2015, 2016, 2017 Clerk Ma
+# Copyright (c) 2014, 2015, 2016, 2017, 2018, 2019, 2020 Clerk Ma
 #
 # You may freely use, modify and/or distribute this file.
 #
 
 CC = gcc
-CFLAGS = -c -O2
+CDEBUG =
+CFLAGS = $(CDEBUG) -c -O2
 INCLUDES = \
 	-I ../texlive/texk/ptexenc/ \
 	-I ../texlive/texk/ \
 	-I ../texlive/libs/zlib/include \
 	-I ../texlive/libs/freetype2/freetype2 \
-	-I libcairo \
+	-I ../texlive/libs/cairo/cairo \
 	-I ../texlive/libs/cairo/cairo-src/src \
+	-I ../texlive/texk/web2c/libmd5 \
 	-I libotf/src \
-	-I libyaml/include \
 	-I mruby/include
-LDFLAGS = libdpx.a libcairo.a libpixman.a libpng.a libpaper.a libz.a libptexenc.a libkpathsea.a libotf.a libfreetype.a libyaml.a libmruby.a -lm
+LDLIBS = libdpx.a libcairo-pdf.a libcairo.a libpixman.a libpng.a libpaper.a libz.a libptexenc.a libkpathsea.a libotf.a libfreetype.a libmd5.a libmruby.a -lm
+LDFLAGS = -s -o
 
 objects = \
 	aptex.o \
 	aptex-cairo-visual-debug.o \
 	aptex-opentype.o \
 	aptex-unicode.o \
+	aptex-utils.o \
 	aptex-mruby.o \
 	aptex-src.o
 
@@ -37,11 +40,11 @@ lsotfea_objects = \
 all: aptex lsotfea
 
 aptex: $(objects)
-	$(CC) -s -o aptex $(objects) $(LDFLAGS)
+	$(CC) $(LDFLAGS) aptex $(objects) $(LDLIBS)
 	cp aptex ptex-ng
 
 lsotfea: lsotfea-src/lsotfea.c lsotfea-src/lsotfea-stag.c lsotfea-src/lsotfea-ltag.c lsotfea-src/lsotfea-ftag.c
-	$(CC) -s -O2 -o lsotfea $(INCLUDES) lsotfea-src/lsotfea.c lsotfea-src/lsotfea-stag.c lsotfea-src/lsotfea-ltag.c lsotfea-src/lsotfea-ftag.c libotf.a libfreetype.a
+	$(CC) -O2 $(LDFLAGS) lsotfea $(INCLUDES) lsotfea-src/lsotfea.c lsotfea-src/lsotfea-stag.c lsotfea-src/lsotfea-ltag.c lsotfea-src/lsotfea-ftag.c libotf.a libfreetype.a
 
 aptex.o: aptex.c $(headers)
 	$(CC) $(CFLAGS) $(INCLUDES) aptex.c
@@ -54,6 +57,9 @@ aptex-opentype.o: aptex-opentype.c $(headers)
 
 aptex-unicode.o: aptex-unicode.c $(headers)
 	$(CC) $(CFLAGS) $(INCLUDES) aptex-unicode.c
+
+aptex-utils.o: aptex-utils.c $(headers)
+	$(CC) $(CFLAGS) $(INCLUDES) aptex-utils.c
 
 aptex-mruby.o: aptex-mruby.c $(headers)
 	$(CC) $(CFLAGS) $(INCLUDES) aptex-mruby.c

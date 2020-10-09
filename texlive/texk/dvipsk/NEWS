@@ -1,5 +1,12 @@
-$Id: NEWS 46759 2018-02-27 23:14:55Z karl $
+$Id: NEWS 53427 2020-01-16 22:02:50Z karl $
 This file records noteworthy changes.  (Public domain.)
+
+dvips 2020.1 (TeX Live 2020):
+  Encodings for bitmap fonts.
+  https://tug.org/TUGboat/tb40-2/tb125rokicki-type3search.pdf
+  
+dvips 5.999 (TeX Live 2019):
+  Buffer overflows.
 
 dvips 5.998 (TeX Live 2018):
   New JFM (Japanese font metrics) spec supported; compiler portability fixes.

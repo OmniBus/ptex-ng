@@ -28,8 +28,15 @@
 #ifndef WIN32
 #include <sys/wait.h>
 #else /* WIN32 */
-#undef pipe
+#include <fcntl.h>
+#include <io.h>
+#include <process.h>
+#ifndef pipe
 #define pipe(p) _pipe(p, 65536, O_BINARY | _O_NOINHERIT)
+#endif
+#ifndef snprintf
+#define snprintf _snprintf
+#endif
 #endif /* WIN32 */
 #endif
 
@@ -485,6 +492,25 @@ void SetSpecial(char *start, char *end, int32_t hh, int32_t vv)
 
       PSCodeInit(&image, NULL);
       image.filename=kpse_find_file(psname,kpse_pict_format,0);
+#if !defined(MIKTEX) && defined(WIN32)
+      if (image.filename == NULL) {
+        wchar_t *wnam;
+        char *tmpnam;
+        int tmpcp;
+        tmpcp = file_system_codepage;
+        file_system_codepage = CP_UTF8;
+        tmpnam = kpse_find_file(psname,kpse_pict_format,0);
+        if (tmpnam) {
+          wnam = get_wstring_from_mbstring(CP_UTF8, tmpnam, wnam=NULL);
+          if (wnam) {
+            image.filename = get_mbstring_from_wstring(tmpcp, wnam, image.filename=NULL);
+            free(wnam);
+          }
+          free(tmpnam);
+        }
+        file_system_codepage = tmpcp;
+      }
+#endif
       if (MmapFile(image.filename,&(image.fmmap)) || image.fmmap.size==0) {
 	Warning("Image file %s unusable, image will be left blank",
 		image.filename);

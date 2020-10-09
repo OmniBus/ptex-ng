@@ -1,7 +1,7 @@
-## $Id: Makefile.am 44086 2017-04-27 21:38:29Z karl $
+## $Id: Makefile.am 50997 2019-05-05 12:51:20Z hironobu $
 ## Makefile.am for the TeX Live subdirectory texk/bibtex-x/
 ##
-## Copyright 2017  Peter Breitenlohner <tex-live@tug.org>
+## Copyright 2017-2019 Karl Berry <tex-live@tug.org>
 ## Copyright 2009-2015 Peter Breitenlohner <tex-live@tug.org>
 ## You may freely use, modify and/or distribute this file.
 ##
@@ -46,6 +46,8 @@ bibtexu_CPPFLAGS = $(AM_CPPFLAGS) $(ICU_INCLUDES) -DUTF_8
 $(bibtexu_OBJECTS): $(KPATHSEA_DEPEND) $(ICU_DEPEND)
 bibtexu_LDADD = $(KPATHSEA_LIBS) $(ICU_LIBS) $(ICU_LIBS_EXTRA)
 
+dist_man1_MANS = bibtex8.1 bibtexu.1
+
 ## Rebuild libkpathsea
 @KPATHSEA_RULE@
 ## Rebuild libsicuxxx
@@ -74,7 +76,7 @@ dist_btdoc_DATA = \
 ## Tests.
 ##
 bibtex8_tests = tests/bibtex8.test tests/bibtex8-mem.test tests/sort.test
-bibtexu_tests = tests/bibtexu.test
+bibtexu_tests = tests/bibtexu.test tests/bibtexu-yannis.test
 
 TESTS =
 if BIBTEX8
@@ -84,7 +86,7 @@ tests/bibtex8.log tests/bibtex8-mem.log tests/sort.log: bibtex8$(EXEEXT)
 if BIBTEXU
 TESTS += $(bibtexu_tests)
 endif BIBTEXU
-tests/bibtexu.log: bibtexu$(EXEEXT)
+tests/bibtexu.log tests/bibtexu-yannis.log: bibtexu$(EXEEXT)
 
 EXTRA_DIST = $(bibtex8_tests) $(bibtexu_tests)
 DISTCLEANFILES =
@@ -99,6 +101,9 @@ EXTRA_DIST += tests/sort.aux \
 DISTCLEANFILES += tests/xsort.aux tests/xsort.bbl tests/xsort.blg
 ## tests/bibtex8-mem.test
 DISTCLEANFILES += tests/memtest.bib tests/memtest?.*
+## tests/bibtexu-yannis.test
+EXTRA_DIST += tests/yannis.aux tests/yannis.bbl tests/yannis.bib
+DISTCLEANFILES += tests/xyannis.aux tests/xyannis.bbl tests/xyannis.blg
 
 ## Not used
 ##

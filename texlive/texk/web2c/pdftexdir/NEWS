@@ -1,7 +1,34 @@
 - changes:
+  - new primitives \pdfrunninglinkoff and \pdfrunninglinkon; e.g., for
+    turning off generation of links in headers and footers.
+  - warn instead of aborting when "\pdfendlink ended up in
+    different nesting level than \pdfstartlink". 
+
+- bugfixes:
+  - avoid crash in unusual autoexpand cases.
+
+- source: poppler support removed, as it was too hard to keep in sync
+  with upstream. For native TL, pdftex has always used libs/xpdf,
+  which is cut-down and adapted code from xpdf.
+
+pdfTeX 3.14159265-2.6-1.40.21 (TeX Live 2020) (March 27, 2020)
+- changes:
+  - new primitive \pdfmajorversion; this merely changes the version
+    number in the PDF output, has no effect on PDF content.
+  - have \pdfximage etc. do same search for image files as for input files, 
+  - new \input{...} group-delimited syntax (cross-engine).
+  - new option --cnf-line (cross-engine).
+  - (un)compress .fmt files with zlib (cross-engine).
+  
+pdfTeX 3.14159265-2.6-1.40.20 (TeX Live 2019)
+- changes:
   - new primitive \expanded (from unreleased pdftex 1.50 branch + luatex).
-  - the /CharSet string is now always omitted from the PDF output, since
-    it cannot feasibly be guaranteed correct, but the standard requires this.
+  - new primitive parameter \pdfmajorversion; 1 by default, but can be
+    set to any positive integer; affects only the %PDF- line.
+  - new primitive parameter \pdfomitcharset; zero by default to include
+    the /CharSet value from the PDF output as usual; setting to 1 omits
+    it, since it cannot feasibly be guaranteed correct as the PDF/A-2
+    and /A-3 standards require.
 
 pdfTeX 3.14159265-2.6-1.40.19 (TeX Live 2018)  (April 14, 2018)
 - changes:
@@ -9,7 +36,7 @@ pdfTeX 3.14159265-2.6-1.40.19 (TeX Live 2018)  (April 14, 2018)
     (pdftex r782).
   - allow encoding vectors for bitmap PK fonts (r790).
   - when a non-PDF special is ignored, output a (leading substring of the)
-  special, preceded by "<special> ".
+    special, preceded by "<special> ".
 
 - bugfixes:
   - \pdfprimitive does nothing, rather than give an error, when given a
@@ -20,13 +47,7 @@ pdfTeX 3.14159265-2.6-1.40.19 (TeX Live 2018)  (April 14, 2018)
     range for Unicode; the implication is that multiple code points must
     now be separated by spaces (as has always been documented).
 
-- source: support xpdf-4 by default, or xpdf-3.04, or poppler-0.57.0
-  and older, via #defines. Provide new files, pdftosrc-newpoppler.cc,
-  for poppler-0.59.0 and newer, pdftoepdf-poppler0.68.0.cc for
-  poppler-0.59.0 upto poppler-0.68.0, pdftoepdf-poppler0.69.0.cc
-  for poppler-0.69.0, and pdftoepdf-poppler0.70.0.cc for poppler-0.70.0
-  and newer. They should be renamed as pdftosrc.cc
-  and pdftoepdf.cc, respectively, before compilation.
+- source: support xpdf-4 by default, or xpdf-3.04, via #defines.
 
 ---------------------------------------------------------------
 pdfTeX 3.14159265-2.6-1.40.18 (TeX Live 2017)  (April 27, 2017)

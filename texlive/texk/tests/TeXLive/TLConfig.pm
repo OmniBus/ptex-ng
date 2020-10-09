@@ -1,12 +1,11 @@
-# $Id: TLConfig.pm 48093 2018-06-26 21:03:56Z preining $
 # TeXLive::TLConfig.pm - module exporting configuration values
-# Copyright 2007-2018 Norbert Preining
+# Copyright 2007-2020 Norbert Preining
 # This file is licensed under the GNU General Public License version 2
 # or any later version.
 
 package TeXLive::TLConfig;
 
-my $svnrev = '$Revision: 48093 $';
+my $svnrev = '$Revision: 54123 $';
 my $_modulerevision = ($svnrev =~ m/: ([0-9]+) /) ? $1 : "unknown";
 sub module_revision { return $_modulerevision; }
 
@@ -22,7 +21,6 @@ BEGIN {
     $MetaCategoriesRegexp
     $CategoriesRegexp
     $DefaultCategory
-    $DefaultFallbackDownloader
     @AcceptedFallbackDownloaders
     %FallbackDownloaderProgram
     %FallbackDownloaderArgs
@@ -31,6 +29,7 @@ BEGIN {
     %Compressors
     $InfraLocation
     $DatabaseName
+    $DatabaseLocation
     $PackageBackupDir 
     $BlockSize
     $Archive
@@ -46,6 +45,8 @@ BEGIN {
     %TLPDBSettings
     %TLPDBConfigs
     $NetworkTimeout
+    $MaxLWPErrors
+    $MaxLWPReinitCount
     $PartialEngineSupport
     $F_OK $F_WARNING $F_ERROR $F_NOPOSTACTION
     $ChecksumLength
@@ -57,11 +58,11 @@ BEGIN {
 
 # the year of our release, will be used in the location of the
 # network packages, and in menu names, and other places.
-$ReleaseYear = 2018;
+$ReleaseYear = 2020;
 
 # users can upgrade from this year to the current year; might be the
 # same as the release year, or any number of releases earlier.
-# Generally not tested.
+# Generally not tested, but should be.
 $MinRelease = 2016;
 
 # Meta Categories do not ship files, but only call for other packages.
@@ -83,14 +84,20 @@ our $DefaultCategory = "Package";
 # relative to a root (e.g., the Master/, or the installation path)
 our $InfraLocation = "tlpkg";
 our $DatabaseName = "texlive.tlpdb";
+our $DatabaseLocation = "$InfraLocation/$DatabaseName";
 
 # location of backups in default autobackup setting (under tlpkg)
 our $PackageBackupDir = "$InfraLocation/backups";
 
+# for computing disk usage; this is most common.
 our $BlockSize = 4096;
 
 # timeout for network connections (wget, LWP) in seconds
 our $NetworkTimeout = 30;
+# number of errors during an LWP session until it is marked as disabled
+our $MaxLWPErrors = 5;
+# max number of times we reenable LWP after it was disabled
+our $MaxLWPReinitCount = 10;
 
 our $Archive = "archive";
 our $TeXLiveServerURL = "http://mirror.ctan.org";
@@ -112,13 +119,13 @@ if ($^O =~ /^MSWin/i) {
 }
 
 #
-our $DefaultFallbackDownloader = "wget";
 our @AcceptedFallbackDownloaders = qw/curl wget/;
 our %FallbackDownloaderProgram = ( 'wget' => 'wget', 'curl' => 'curl');
 our %FallbackDownloaderArgs = (
-  'curl' => ['--user-agent', 'texlive/curl', '--retry', '10', '--fail', '--location',
+  'curl' => ['--user-agent', 'texlive/curl', '--retry', '4', '--retry-delay', '5',
+             '--fail', '--location',
              '--connect-timeout', "$NetworkTimeout", '--silent', '--output'],
-  'wget' => ['--user-agent=texlive/wget', '--tries=10',
+  'wget' => ['--user-agent=texlive/wget', '--tries=4',
              "--timeout=$NetworkTimeout", '-q', '-O'],
 );
 # the way we package things on the web
@@ -128,7 +135,7 @@ our $DefaultCompressorFormat = "xz";
 our %Compressors = (
   "lz4" => {
     "decompress_args" => ["-dcf"],
-    "compress_args"   => ["-zfmq", "--rm"],
+    "compress_args"   => ["-zfmq"],
     "extension"       => "lz4",
     "priority"        => 10,
   },
@@ -145,7 +152,9 @@ our %Compressors = (
     "priority"        => 30,
   },
 );
-our $CompressorExtRegexp = "(" . join("|", map { $Compressors{$_}{'extension'} } keys(%Compressors)) . ")";
+our $CompressorExtRegexp = "("
+    . join("|", map { $Compressors{$_}{'extension'} } keys %Compressors)
+    . ")";
 
 # archive (not user) settings.
 # these can be overridden by putting them into 00texlive.config.tlpsrc
@@ -186,7 +195,7 @@ our %TLPDBOptions = (
       "Directory for backups" ],
   "create_formats" =>
     [ "b", 1, "formats",  
-      "Create formats on installation" ],
+      "Generate formats at installation or update" ],
   "desktop_integration" =>
     [ "b", 1, "desktop_integration",
       "Create Start menu shortcuts (w32)" ],
@@ -225,14 +234,14 @@ our %TLPDBOptions = (
 
 our %TLPDBSettings = (
   "platform" => [ "s", "Main platform for this computer" ],
-  "available_architectures" => [ "l", "All available/installed architectures" ],
+  "available_architectures" => [ "l","All available/installed architectures" ],
   "usertree" => [ "b", "This tree acts as user tree" ]
 );
 
 our $WindowsMainMenuName = "TeX Live $ReleaseYear";
 
 # Comma-separated list of engines which do not exist on all platforms.
-our $PartialEngineSupport = "luajittex,mfluajit";
+our $PartialEngineSupport = "luajithbtex,luajittex,mfluajit";
 
 # Flags for error handling across the scripts and modules
 # all fine
@@ -310,6 +319,16 @@ The default category used when creating new packages.
 The subdirectory with various infrastructure files (C<texlive.tlpdb>,
 tlpobj files, ...) relative to the root of the installation; currently
 C<tlpkg>.
+
+=item C<$TeXLive::TLConfig::DatabaseName>
+
+The name of our so-called database file: C<texlive.tlpdb>. It's just a
+plain text file, not any kind of relational or other database.
+
+=item C<$TeXLive::TLConfig::DatabaseLocation>
+
+Concatenation of C<InfraLocation> "/" C<DatabaseName>, i.e.,
+C<tlpkg/texlive.tlpdb>.
 
 =item C<$TeXLive::TLConfig::BlockSize>
 

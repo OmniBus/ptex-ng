@@ -1,3 +1,114 @@
+2020-08-29  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* pdvitype.ch: Support dtou direction. Strict check for DVI ID
+	with command 255. Version p0.5.
+
+2020-05-17  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ppltotf.ch: Avoid compiler warnings: equality comparison with
+	extraneous parentheses.
+
+2020-05-05  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* ptex-base.ch: Improved resetting inhibit_glue_flag in extensions.
+	https://github.com/texjporg/tex-jp-build/pull/102
+
+2020-02-09  Phelype Oleinik  <phe.h.o1@gmail.com>
+
+	* ptexdir/ptex-base.ch: extra end; needed for the scan_file_name
+	change in tex.ch.
+
+2020-02-09  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* ptex-base.ch: forgot to set cur_val_level in fetching
+	\kansujichar (Bug introduced in commit on 2019-10-14).
+
+2020-02-05  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ptex-base.ch: Add new primitives \ifjfont and \iftfont.
+
+2019-12-10  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* am/ptex.am (ptex_cppflags): append $(ZLIB_INCLUDES).
+	(ptex_ldadd): append $(ZLIB_LIBS.)
+	(ptex_dependencies): append $(ZLIB_DEPEND) 
+	(ptex_web_srcs): append zlib-fmt.ch.
+	* kanji.h: #include <zlib.h>
+	(dump_kanji, undump_kanji): arg is now type gzFile instead of FILE *.
+	* kanji_dump.c (pTeX) [!pTeX]: #define if not already.
+	(dump_kanji, undump_kanji): chang arg type.
+	* zfmtcompress.test: new script (not enabled).
+
+2019-10-14  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ptex-base.ch: Allow getting \kansujichar.
+	* ptex_version.h: pTeX version p3.8.3.
+
+2019-08-04  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ppltotf.ch: 'This property name doesn't belong in a TYPE list'
+	was never available.
+
+2019-06-24  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ptex-base.ch: 'Improper alphabetic or KANJI constant' error
+	should be raised for multibyte CS.
+	* tests/let_char_token.tex: Added.
+
+2019-05-28  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* am/ptex.am: Add a new test.
+	* pver.test: New test file for version number consistency.
+	* tests/pver1.tex, ptexdir/tests/pver2.tex: New.
+
+2019-05-06  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* ptex-base.ch:
+	Make appropriate comparison of U+0100 by \if in upTeX.
+	https://github.com/texjporg/tex-jp-build/issues/68
+	Re-eval kcatcode of Japanese character token in \if and \ifcat.
+	https://github.com/texjporg/ptex-manual/issues/4
+
+2019-02-03  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+
+	* ptex-base.ch: Ignore newline char after Japanese control
+	symbol. https://github.com/texjporg/tex-jp-build/issues/37
+	* tests/control_symbol.tex: More test cases.
+	* ptex_version.h: pTeX version p3.8.2.
+
+2019-02-03  Hironori Kitagawa  <h_kitagawa2001@yahoo.co.jp>
+	and Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ptex-base.ch: Change the behavior of \inhibitglue. See
+	  https://github.com/texjporg/tex-jp-build/issues/28.
+	  - \inhibitglue becomes ineffective when it encounters a node.
+	    (former commit on 2014-05-06 was still insufficient.)
+	  - non-expandable tokens without node (e.g. \relax, assignment)
+	    becomes transparent.
+	  - \inhibitglue inside a list does not affect another list.
+	  - Add new primitive \disinhibitglue to reset the inhibit glue
+	    flag explicitly.
+	* tests/inhibitglue.tex: Added.
+
+2019-02-03  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* kanji.h: Use fputs2() to benefit from kanji encoding conversion.
+	https://github.com/texjporg/tex-jp-build/issues/34
+
+2019-01-23  Hironobu Yamashita  <h.y.acetaminophen@gmail.com>
+
+	* ptex-base.ch: Add dump_kanji and undump_kanji.
+	* ptex.defines: Add dumpkanji and undumpkanji.
+	* kanji.c: Factor out init_kanji().
+	* kanji_dump.c: New file for dumping/undumping kanji encoding.
+	* kanji.h: Add init_kanji(), dump_kanji(), and undump_kanji().
+	* am/ptex.am (libkanji_a_SOURCES): Add kanji_dump.c.
+	(all changes based on tl r23753 of upTeX, dated 2011-08-29.)
+
+	* kanji_dump.c: Throw a warning when kanji internal encoding
+	is incompatible with the preloaded format.
+	https://github.com/texjporg/tex-jp-build/issues/55
+
 2018-09-09  Karl Berry  <karl@tug.org>
 
 	* ptriptest.test: LC_ALL=LANGUAGE=C.

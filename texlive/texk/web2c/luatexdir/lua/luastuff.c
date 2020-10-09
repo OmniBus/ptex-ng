@@ -189,6 +189,9 @@ static const luaL_Reg lualibs[] = {
 #endif
     { "ffi",       luaopen_ffi },
     /*tex more libraries will be loaded later */
+#ifdef LUATEX_HARFBUZZ_ENABLED
+    { "luaharfbuzz", luaopen_luaharfbuzz },
+#endif
     { NULL,        NULL }
 };
 
@@ -346,9 +349,7 @@ void luainterpreter(void)
         /*tex preload the pure \LUA\ modules */
         luatex_socketlua_open(L);
     }
-    /*tex |zlib|'s slightly odd calling convention */
     luaopen_zlib(L);
-    lua_setglobal(L, "zlib");
     luaopen_gzip(L);
     /*tex our own libraries register themselves */
     luaopen_fio(L);

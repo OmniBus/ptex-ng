@@ -53,13 +53,13 @@ AC_PREREQ([2.57])
 #
 
 m4_define([pixman_major], 0)
-m4_define([pixman_minor], 34)
+m4_define([pixman_minor], 40)
 m4_define([pixman_micro], 0)
 
 m4_define([pixman_version],[pixman_major.pixman_minor.pixman_micro])
 
 AC_INIT(pixman, pixman_version, [pixman@lists.freedesktop.org], pixman)
-AM_INIT_AUTOMAKE([foreign dist-bzip2])
+AM_INIT_AUTOMAKE([foreign dist-xz])
 
 # Suppress verbose compile lines
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -273,7 +273,7 @@ dnl ===========================================================================
 dnl Check for Loongson Multimedia Instructions
 
 if test "x$LS_CFLAGS" = "x" ; then
-    LS_CFLAGS="-march=loongson2f"
+    LS_CFLAGS="-mloongson-mmi"
 fi
 
 have_loongson_mmi=no
@@ -832,6 +832,19 @@ if test $enable_timers = yes ; then
    AC_DEFINE(PIXMAN_TIMERS, 1, [enable TIMER_BEGIN/TIMER_END macros])
 fi
 AC_SUBST(PIXMAN_TIMERS)
+
+dnl ===================================
+dnl gnuplot
+
+AC_ARG_ENABLE(gnuplot,
+   [AC_HELP_STRING([--enable-gnuplot],
+                   [enable output of filters that can be piped to gnuplot [default=no]])],
+   [enable_gnuplot=$enableval], [enable_gnuplot=no])
+
+if test $enable_gnuplot = yes ; then
+   AC_DEFINE(PIXMAN_GNUPLOT, 1, [enable output that can be piped to gnuplot])
+fi
+AC_SUBST(PIXMAN_GNUPLOT)
 
 dnl ===================================
 dnl GTK+

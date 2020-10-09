@@ -1,4 +1,4 @@
-## $Id: Makefile.am 48949 2018-10-19 23:02:01Z kakuto $
+## $Id: Makefile.am 56107 2020-08-13 22:28:17Z kakuto $
 ## Proxy Makefile.am to build harfbuzz for TeX Live.
 ##
 ##   Copyright 2016-2017 Karl Berry <tex-live@tug.org>
@@ -27,37 +27,63 @@ SUBDIRS = . include
 noinst_LIBRARIES = libharfbuzz.a
 
 ## common
-AM_CPPFLAGS = -DHB_NO_MT -DHB_NO_UNICODE_FUNCS -DHAVE_FALLBACK=1 \
+AM_CPPFLAGS = -DHB_NO_MT -DHAVE_FALLBACK=1 \
 	-I$(top_srcdir)/$(HARFBUZZ_SRC)
+## For luahbtex we need this (and the rest ?)
+AM_CXXFLAGS = $(VISIBILITY_CXXFLAGS) $(WARNING_CXXFLAGS)
+
 libharfbuzz_dependencies =
 libharfbuzz_a_SOURCES =  \
+	@HARFBUZZ_TREE@/src/hb-algs.hh \
 	@HARFBUZZ_TREE@/src/hb-atomic.hh \
+	@HARFBUZZ_TREE@/src/hb-bimap.hh \
 	@HARFBUZZ_TREE@/src/hb-blob.hh \
 	@HARFBUZZ_TREE@/src/hb-blob.cc \
 	@HARFBUZZ_TREE@/src/hb-buffer.hh \
 	@HARFBUZZ_TREE@/src/hb-buffer-serialize.cc \
 	@HARFBUZZ_TREE@/src/hb-buffer.cc \
 	@HARFBUZZ_TREE@/src/hb-cache.hh \
+	@HARFBUZZ_TREE@/src/hb-cff-interp-common.hh \
+	@HARFBUZZ_TREE@/src/hb-cff-interp-cs-common.hh \
+	@HARFBUZZ_TREE@/src/hb-cff-interp-dict-common.hh \
+	@HARFBUZZ_TREE@/src/hb-cff1-interp-cs.hh \
+	@HARFBUZZ_TREE@/src/hb-cff2-interp-cs.hh \
 	@HARFBUZZ_TREE@/src/hb-common.cc \
+	@HARFBUZZ_TREE@/src/hb-config.hh \
 	@HARFBUZZ_TREE@/src/hb-debug.hh \
-	@HARFBUZZ_TREE@/src/hb-dsalgs.hh \
+	@HARFBUZZ_TREE@/src/hb-dispatch.hh \
+	@HARFBUZZ_TREE@/src/hb-draw.cc \
+	@HARFBUZZ_TREE@/src/hb-draw.hh \
 	@HARFBUZZ_TREE@/src/hb-face.hh \
 	@HARFBUZZ_TREE@/src/hb-face.cc \
 	@HARFBUZZ_TREE@/src/hb-font.hh \
 	@HARFBUZZ_TREE@/src/hb-font.cc \
 	@HARFBUZZ_TREE@/src/hb-iter.hh \
+	@HARFBUZZ_TREE@/src/hb-kern.hh \
 	@HARFBUZZ_TREE@/src/hb-map.hh \
 	@HARFBUZZ_TREE@/src/hb-map.cc \
 	@HARFBUZZ_TREE@/src/hb-machinery.hh \
+	@HARFBUZZ_TREE@/src/hb-meta.hh \
 	@HARFBUZZ_TREE@/src/hb-mutex.hh \
 	@HARFBUZZ_TREE@/src/hb-null.hh \
+	@HARFBUZZ_TREE@/src/hb-number-parser.hh \
+	@HARFBUZZ_TREE@/src/hb-number.cc \
+	@HARFBUZZ_TREE@/src/hb-number.hh \
 	@HARFBUZZ_TREE@/src/hb-object.hh \
 	@HARFBUZZ_TREE@/src/hb-open-file.hh \
 	@HARFBUZZ_TREE@/src/hb-open-type.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-cff-common.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-cff1-std-str.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-cff1-table.cc \
+	@HARFBUZZ_TREE@/src/hb-ot-cff1-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-cff2-table.cc \
+	@HARFBUZZ_TREE@/src/hb-ot-cff2-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-gasp-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-color-cbdt-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-cmap-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-face.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-face.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-face-table-list.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-glyf-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-hdmx-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-head-table.hh \
@@ -65,13 +91,20 @@ libharfbuzz_a_SOURCES =  \
 	@HARFBUZZ_TREE@/src/hb-ot-hmtx-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-kern-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-maxp-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-name-language-static.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-name-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-stat-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-name-language.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-name.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-os2-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-os2-unicode-ranges.hh \
+	@HARFBUZZ_TREE@/src/hb-pool.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-post-macroman.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-post-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-tag.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-tag-table.hh \
+	@HARFBUZZ_TREE@/src/hb-sanitize.hh \
+	@HARFBUZZ_TREE@/src/hb-serialize.hh \
 	@HARFBUZZ_TREE@/src/hb-set-digest.hh \
 	@HARFBUZZ_TREE@/src/hb-set.hh \
 	@HARFBUZZ_TREE@/src/hb-set.cc \
@@ -84,14 +117,22 @@ libharfbuzz_a_SOURCES =  \
 	@HARFBUZZ_TREE@/src/hb-shaper.cc \
 	@HARFBUZZ_TREE@/src/hb-static.cc \
 	@HARFBUZZ_TREE@/src/hb-string-array.hh \
+	@HARFBUZZ_TREE@/src/hb-style.cc \
+	@HARFBUZZ_TREE@/src/hb-subset-cff-common.cc \
+	@HARFBUZZ_TREE@/src/hb-subset-cff-common.hh \
+	@HARFBUZZ_TREE@/src/hb-subset-cff1.cc \
+	@HARFBUZZ_TREE@/src/hb-subset-cff1.hh \
+	@HARFBUZZ_TREE@/src/hb-subset-cff2.cc \
+	@HARFBUZZ_TREE@/src/hb-subset-cff2.hh \
 	@HARFBUZZ_TREE@/src/hb-subset-input.hh \
 	@HARFBUZZ_TREE@/src/hb-subset.hh \
+	@HARFBUZZ_TREE@/src/hb-ucd-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ucd.cc \
 	@HARFBUZZ_TREE@/src/hb-unicode.hh \
 	@HARFBUZZ_TREE@/src/hb-unicode.cc \
 	@HARFBUZZ_TREE@/src/hb-unicode-emoji-table.hh \
 	@HARFBUZZ_TREE@/src/hb-vector.hh \
 	@HARFBUZZ_TREE@/src/hb-utf.hh \
-	@HARFBUZZ_TREE@/src/hb-warning.cc \
 	@HARFBUZZ_TREE@/src/hb-buffer-deserialize-json.hh \
 	@HARFBUZZ_TREE@/src/hb-buffer-deserialize-text.hh \
 	@HARFBUZZ_TREE@/src/hb-fallback-shape.cc \
@@ -104,11 +145,16 @@ libharfbuzz_a_SOURCES += \
 	@HARFBUZZ_TREE@/src/hb-aat-layout-ankr-table.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-layout-bsln-table.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-layout-feat-table.hh \
+	@HARFBUZZ_TREE@/src/hb-aat-layout-just-table.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-layout-kerx-table.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-layout-morx-table.hh \
+	@HARFBUZZ_TREE@/src/hb-aat-layout-opbd-table.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-layout-trak-table.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-layout.hh \
 	@HARFBUZZ_TREE@/src/hb-aat-ltag-table.hh \
+	@HARFBUZZ_TREE@/src/hb-aat-map.cc \
+	@HARFBUZZ_TREE@/src/hb-aat-map.hh \
+	@HARFBUZZ_TREE@/src/hb-array.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-font.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-layout.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-layout-base-table.hh \
@@ -128,10 +174,15 @@ libharfbuzz_a_SOURCES += \
 	@HARFBUZZ_TREE@/src/hb-ot-map.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-math.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-math-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-meta-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-meta.cc \
+	@HARFBUZZ_TREE@/src/hb-ot-metrics.cc \
+	@HARFBUZZ_TREE@/src/hb-ot-metrics.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-arabic.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-arabic-fallback.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-arabic.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-arabic-joining-list.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-arabic-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-arabic-win1256.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-default.cc \
@@ -146,6 +197,8 @@ libharfbuzz_a_SOURCES += \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-myanmar.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-thai.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-use.cc \
+	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-vowel-constraints.cc \
+	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-vowel-constraints.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-use-table.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-use.hh \
@@ -157,17 +210,14 @@ libharfbuzz_a_SOURCES += \
 	@HARFBUZZ_TREE@/src/hb-ot-var.cc \
 	@HARFBUZZ_TREE@/src/hb-ot-var-avar-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-var-fvar-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-var-gvar-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-var-hvar-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-var-mvar-table.hh \
+	@HARFBUZZ_TREE@/src/hb-ot-vorg-table.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-indic-machine.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-khmer-machine.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-myanmar-machine.hh \
 	@HARFBUZZ_TREE@/src/hb-ot-shape-complex-use-machine.hh
-
-## ICU library
-AM_CPPFLAGS += $(ICU_INCLUDES)
-libharfbuzz_dependencies += $(ICU_DEPEND)
-libharfbuzz_a_SOURCES += @HARFBUZZ_TREE@/src/hb-icu.cc
 
 ## Graphite library
 AM_CPPFLAGS += $(GRAPHITE2_INCLUDES)
@@ -188,12 +238,10 @@ hbtest_SOURCES = hbtest.c
 # Force Automake to use CXXLD for linking
 nodist_EXTRA_hbtest_SOURCES = dummy.cxx
 
-hbtest_CPPFLAGS = -Iinclude $(ICU_INCLUDES) $(GRAPHITE2_INCLUDES)
+hbtest_CPPFLAGS = -Iinclude $(GRAPHITE2_INCLUDES)
 
-LDADD = libharfbuzz.a $(ICU_LIBS) $(ICU_LIBS_EXTRA) $(GRAPHITE2_LIBS)
+LDADD = libharfbuzz.a $(GRAPHITE2_LIBS)
 
-## Rebuild libsicuxxx
-@ICU_RULE@
 ## Rebuild libgraphite2
 @GRAPHITE2_RULE@
 

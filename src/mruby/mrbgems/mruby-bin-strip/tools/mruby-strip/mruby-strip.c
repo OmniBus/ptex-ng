@@ -1,7 +1,11 @@
-#include <stdio.h>
+#include <mruby.h>
+
+#ifdef MRB_DISABLE_STDIO
+# error mruby-bin-strip conflicts 'MRB_DISABLE_STDIO' configuration in your 'build_config.rb'
+#endif
+
 #include <stdlib.h>
 #include <string.h>
-#include <mruby.h>
 #include <mruby/irep.h>
 #include <mruby/dump.h>
 
@@ -11,22 +15,6 @@ struct strip_args {
   char **argv;
   mrb_bool lvar;
 };
-
-
-static void
-irep_remove_lv(mrb_state *mrb, mrb_irep *irep)
-{
-  int i;
-
-  if (irep->lv) {
-    mrb_free(mrb, irep->lv);
-    irep->lv = NULL;
-  }
-
-  for (i = 0; i < irep->rlen; ++i) {
-    irep_remove_lv(mrb, irep->reps[i]);
-  }
-}
 
 static void
 print_usage(const char *f)
@@ -99,7 +87,7 @@ strip(mrb_state *mrb, struct strip_args *args)
 
     /* clear lv if --lvar is enabled */
     if (args->lvar) {
-      irep_remove_lv(mrb, irep);
+      mrb_irep_remove_lv(mrb, irep);
     }
 
     wfile = fopen(filename, "wb");
